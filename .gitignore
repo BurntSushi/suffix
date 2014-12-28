@@ -1,0 +1,8 @@
+.*.swp
+doc
+tags
+examples/data/ss10pusa.csv
+build
+target
+Cargo.lock
+scratch*
