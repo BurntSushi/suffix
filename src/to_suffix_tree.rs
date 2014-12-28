@@ -105,29 +105,52 @@ fn ancestor_lcp_len<'a, 's>(start_node: &'a mut Node<'s>, lcp_len: u32)
 
 #[cfg(test)]
 mod tests {
+    use quickcheck::quickcheck;
     use array_naive;
 
     #[test]
     fn basic() {
         let sa = array_naive(format!("banana"));
-        debug!("{}", sa);
         let st = sa.to_suffix_tree();
-        debug!("{}", st);
     }
 
     #[test]
     fn basic2() {
         let sa = array_naive(format!("apple"));
-        debug!("{}", sa);
         let st = sa.to_suffix_tree();
-        debug!("{}", st);
     }
 
     #[test]
     fn basic3() {
         let sa = array_naive(format!("mississippi"));
-        debug!("{}", sa);
+        let st = sa.to_suffix_tree();
+    }
+
+    #[test]
+    fn prop_n_leaves() {
+        fn prop(s: String) -> bool {
+            let sa = array_naive(s.clone());
+            let st = sa.to_suffix_tree();
+            st.root.leaves().count() == s.len() + 1
+        }
+        quickcheck(prop as fn(String) -> bool);
+    }
+
+    #[test]
+    fn scratch() {
+        let sa = array_naive(format!("mississippi"));
         let st = sa.to_suffix_tree();
         debug!("{}", st);
+        // let node = st.root.children.get(&'a').unwrap()
+                          // .children.get(&'n').unwrap()
+                          // .children.get(&'n').unwrap();
+        // debug!("{}", st);
+        // debug!("NODE: {}", node);
+        for n in st.root.leaves() {
+            debug!("{}", n.label);
+        }
+        // for ancestor in node.ancestors().skip(1) {
+            // debug!("ancestor: {}", ancestor.label);
+        // }
     }
 }

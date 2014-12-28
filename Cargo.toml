@@ -10,3 +10,5 @@ readme = "README.md"
 keywords = ["suffix", "text", "search", "index"]
 license = "Unlicense"
 
+[dev-dependencies]
+quickcheck = "*"

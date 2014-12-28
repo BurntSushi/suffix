@@ -8,8 +8,10 @@
 #![allow(dead_code, unused_imports, unused_variables)]
 
 #[phase(plugin, link)] extern crate log;
+#[cfg(test)] extern crate quickcheck;
 
-use std::collections::BTreeMap;
+use std::collections::btree_map::{mod, BTreeMap};
+use std::collections::RingBuf;
 use std::fmt;
 use std::iter;
 use std::mem;
@@ -100,12 +102,36 @@ impl<'s> Node<'s> {
             label: label,
             children: BTreeMap::new(),
             parent: Rawlink::none(),
-            terminal: false,
+            terminal: true,
         }
     }
 
+    fn parent(&self) -> Option<&Node<'s>> {
+        self.parent.resolve_immut()
+    }
+
+    fn parent_mut(&mut self) -> Option<&mut Node<'s>> {
+        self.parent.resolve()
+    }
+
+    fn children<'t>(&'t self) -> Children<'s, 't> {
+        Children { it: self.children.values() }
+    }
+
+    fn ancestors<'t>(&'t self) -> Ancestors<'s, 't> {
+        Ancestors { cur: Some(self) }
+    }
+
+    fn preorder<'t>(&'t self) -> Preorder<'s, 't> {
+        Preorder::new(self)
+    }
+
+    fn leaves<'t>(&'t self) -> Leaves<'s, 't> {
+        Leaves { it: self.preorder() }
+    }
+
     fn is_terminal(&self) -> bool {
-        self.children.len() == 0
+        self.terminal
     }
 
     fn is_root(&self) -> bool {
@@ -120,7 +146,7 @@ impl<'s> Node<'s> {
         let mut len = self.label.len();
         let mut cur = self;
         loop {
-            match cur.parent.resolve_immut() {
+            match cur.parent() {
                 None => break,
                 Some(p) => { cur = p; len += p.label.len(); }
             }
@@ -132,7 +158,7 @@ impl<'s> Node<'s> {
         let mut depth = 0;
         let mut cur = self;
         loop {
-            match cur.parent.resolve_immut() {
+            match cur.parent() {
                 None => break,
                 Some(p) => {
                     depth += 1;
@@ -194,6 +220,80 @@ impl<'s> fmt::Show for Node<'s> {
             try!(node.fmt(f));
         }
         Ok(())
+    }
+}
+
+struct Ancestors<'s: 't, 't> {
+    cur: Option<&'t Node<'s>>,
+}
+
+impl<'s, 't> Iterator<&'t Node<'s>> for Ancestors<'s, 't> {
+    fn next(&mut self) -> Option<&'t Node<'s>> {
+        if let Some(node) = self.cur {
+            self.cur = node.parent();
+            Some(node)
+        } else {
+            None
+        }
+    }
+}
+
+struct Children<'s: 't, 't> {
+    it: btree_map::Values<'t, char, Box<Node<'s>>>,
+}
+
+impl<'s, 't> Iterator<&'t Node<'s>> for Children<'s, 't> {
+    fn next(&mut self) -> Option<&'t Node<'s>> {
+        self.it.next().map(|n| &**n)
+    }
+
+    fn size_hint(&self) -> (uint, Option<uint>) {
+        self.it.size_hint()
+    }
+}
+
+impl<'s, 't> DoubleEndedIterator<&'t Node<'s>> for Children<'s, 't> {
+    fn next_back(&mut self) -> Option<&'t Node<'s>> {
+        self.it.next_back().map(|n| &**n)
+    }
+}
+
+impl<'s, 't> ExactSizeIterator<&'t Node<'s>> for Children<'s, 't> {}
+
+struct Preorder<'s: 't, 't> {
+    stack: Vec<&'t Node<'s>>,
+}
+
+impl<'s, 't> Preorder<'s, 't> {
+    fn new(start: &'t Node<'s>) -> Preorder<'s, 't> {
+        Preorder { stack: vec![start] }
+    }
+}
+
+impl<'s, 't> Iterator<&'t Node<'s>> for Preorder<'s, 't> {
+    fn next(&mut self) -> Option<&'t Node<'s>> {
+        match self.stack.pop() {
+            None => None,
+            Some(node) => {
+                self.stack.extend(node.children().rev());
+                Some(node)
+            }
+        }
+    }
+}
+
+struct Leaves<'s: 't, 't> {
+    it: Preorder<'s, 't>,
+}
+
+impl<'s, 't> Iterator<&'t Node<'s>> for Leaves<'s, 't> {
+    fn next(&mut self) -> Option<&'t Node<'s>> {
+        for n in self.it {
+            if n.is_terminal() {
+                return Some(n);
+            }
+        }
+        None
     }
 }
 
