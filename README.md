@@ -13,7 +13,7 @@ alphabets or dismiss a practioner's concerns of a large integer alphabet).
 
 To build suffix trees, we'll first build a suffix array (with the lengths of
 least common prefixes for adjacent suffixes) and use that to construct a suffix
-tree. Currently, I believe the algorithm has time complexity `O(n * (logn *
+tree. Currently, I believe the algorithm has time complexity `O(n * (logn +
 logm))` where `n` is the size of the string being indexed and `m` is the size
 of the alphabet. I believe this can be reduced to `O(n * logm)` by figuring out
 how to compute path label lengths in constant time (probably by trading
