@@ -21,6 +21,11 @@ memory). It is easy enough to remove the `logm` factory by using an ordered
 hash map, but my suspicion is that this incurs too much overhead and it is
 better to just use the standard library `BTree`.
 
+One possible saving grace here is that the "size of the alphabet" actually
+means "the size of the alphabet in the string." My guess is that in most cases,
+this alphabet will be extremely small relative to the full alphabet actually
+supported (i.e., every Unicode character).
+
 The above algorithm has a prototype implementation already. Suffix array
 construction is done naively. My plan is to implement the algorithm described
 in [(Nong et al.,
