@@ -13,7 +13,7 @@
 use std::collections::btree_map::{mod, BTreeMap};
 use std::collections::RingBuf;
 use std::fmt;
-use std::iter;
+use std::iter::{mod, AdditiveIterator};
 use std::mem;
 use std::ptr;
 
@@ -34,14 +34,14 @@ macro_rules! sf {
     ($e:expr, $from:expr) => ($e[$from as uint ..]);
 }
 
-pub struct SuffixArray {
-    text: String,
+pub struct SuffixArray<'s> {
+    text: &'s str,
     indices: Vec<u32>,
     lcp_lens: Vec<u32>,
 }
 
-impl SuffixArray {
-    pub fn to_suffix_tree<'s>(&'s self) -> SuffixTree<'s> {
+impl<'s> SuffixArray<'s> {
+    pub fn to_suffix_tree(&'s self) -> SuffixTree<'s> {
         to_suffix_tree::to_suffix_tree(self)
     }
 
@@ -54,7 +54,7 @@ impl SuffixArray {
     }
 }
 
-impl fmt::Show for SuffixArray {
+impl<'s> fmt::Show for SuffixArray<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(writeln!(f, "\n-----------------------------------------"));
         try!(writeln!(f, "SUFFIX ARRAY"));
@@ -143,30 +143,11 @@ impl<'s> Node<'s> {
     }
 
     fn root_concat_len(&self) -> u32 {
-        let mut len = self.label.len();
-        let mut cur = self;
-        loop {
-            match cur.parent() {
-                None => break,
-                Some(p) => { cur = p; len += p.label.len(); }
-            }
-        }
-        len as u32
+        self.ancestors().map(|node| node.label.len()).sum() as u32
     }
 
-    fn depth(&self) -> uint {
-        let mut depth = 0;
-        let mut cur = self;
-        loop {
-            match cur.parent() {
-                None => break,
-                Some(p) => {
-                    depth += 1;
-                    cur = p;
-                }
-            }
-        }
-        depth
+    fn depth(&self) -> u32 {
+        (self.ancestors().count() - 1) as u32
     }
 }
 
@@ -210,7 +191,8 @@ impl<'s> fmt::Show for SuffixTree<'s> {
 
 impl<'s> fmt::Show for Node<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let indent: String = iter::repeat(' ').take(self.depth() * 2).collect();
+        let depth = self.depth() as uint;
+        let indent: String = iter::repeat(' ').take(depth * 2).collect();
         if self.is_root() {
             try!(writeln!(f, "ROOT"));
         } else {

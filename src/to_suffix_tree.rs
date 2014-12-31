@@ -1,6 +1,6 @@
-use {SuffixArray, SuffixTree, Node, Rawlink};
+use {SuffixArray, SuffixTree, Node, Rawlink, array_naive};
 
-pub fn to_suffix_tree<'s>(sa: &'s SuffixArray) -> SuffixTree<'s> {
+pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
     let mut st = SuffixTree::init(&*sa.text);
     let mut last: *mut Node = &mut *st.root;
     for (i, &sufstart) in sa.indices.iter().enumerate() {
@@ -89,8 +89,13 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixArray) -> SuffixTree<'s> {
 
 fn ancestor_lcp_len<'a, 's>(start_node: &'a mut Node<'s>, lcp_len: u32)
                            -> &'a mut Node<'s> {
+    // Is it worth making a mutable `Ancestors` iterator?
+    // If this is the only place that needs it, probably not. ---AG
     let mut cur = start_node;
     loop {
+        // FIXME: root_concat_len traverses all the way to the root!
+        // So I think that makes this function `O(logn * logn)`. Owch.
+        // We need to store the full path label length I think.
         if cur.root_concat_len() <= lcp_len {
             return cur;
         }
@@ -106,30 +111,30 @@ fn ancestor_lcp_len<'a, 's>(start_node: &'a mut Node<'s>, lcp_len: u32)
 #[cfg(test)]
 mod tests {
     use quickcheck::quickcheck;
-    use array_naive;
+    use {Node, array_naive};
 
     #[test]
     fn basic() {
-        let sa = array_naive(format!("banana"));
+        let sa = array_naive("banana");
         let st = sa.to_suffix_tree();
     }
 
     #[test]
     fn basic2() {
-        let sa = array_naive(format!("apple"));
+        let sa = array_naive("apple");
         let st = sa.to_suffix_tree();
     }
 
     #[test]
     fn basic3() {
-        let sa = array_naive(format!("mississippi"));
+        let sa = array_naive("mississippi");
         let st = sa.to_suffix_tree();
     }
 
     #[test]
-    fn prop_n_leaves() {
+    fn qc_n_leaves() {
         fn prop(s: String) -> bool {
-            let sa = array_naive(s.clone());
+            let sa = array_naive(&*s);
             let st = sa.to_suffix_tree();
             st.root.leaves().count() == s.len() + 1
         }
@@ -137,8 +142,45 @@ mod tests {
     }
 
     #[test]
+    fn qc_internals_have_at_least_two_children() {
+        fn prop(s: String) -> bool {
+            let sa = array_naive(&*s);
+            let st = sa.to_suffix_tree();
+            for node in st.root.preorder() {
+                if !node.is_terminal() && node.children.len() < 2 {
+                    return false;
+                }
+            }
+            true
+        }
+        quickcheck(prop as fn(String) -> bool);
+    }
+
+    #[test]
+    fn qc_tree_enumerates_suffixes() {
+        fn prop(s: String) -> bool {
+            // This is pretty much relying on `array_naive` to produce the
+            // correct suffixes. But the nice thing about the naive algorithm
+            // is that it's stupidly simple.
+            let sa = array_naive(&*s);
+            let st = sa.to_suffix_tree();
+            for (i, leaf) in st.root.leaves().enumerate() {
+                let mut ancestors: Vec<&Node> = leaf.ancestors().collect();
+                ancestors.reverse();
+
+                let suffix: String =
+                    ancestors.iter().map(|node| node.label).collect();
+                if suffix != sa.suffix(i) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+
+    #[test]
     fn scratch() {
-        let sa = array_naive(format!("mississippi"));
+        let sa = array_naive("mississippi");
         let st = sa.to_suffix_tree();
         debug!("{}", st);
         // let node = st.root.children.get(&'a').unwrap()
