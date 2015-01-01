@@ -1,3 +1,5 @@
+use std::iter::repeat;
+
 use SuffixArray;
 
 pub fn construct<'s>(s: &'s str) -> SuffixArray<'s> {
@@ -14,7 +16,7 @@ pub fn construct<'s>(s: &'s str) -> SuffixArray<'s> {
 fn suffix_lcp_lens(text: &str, indices: &[u32]) -> Vec<u32> {
     // The first LCP is always 0 because of the definition:
     //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
-    let mut lcps = Vec::from_elem(indices.len(), 0);
+    let mut lcps: Vec<_> = repeat(0).take(indices.len()).collect();
     for (i, win) in indices.windows(2).enumerate() {
         lcps[i + 1] = lcp_len(sf!(text, win[0]), sf!(text, win[1]));
     }
