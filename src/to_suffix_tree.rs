@@ -6,24 +6,23 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
     for (i, &sufstart) in sa.indices.iter().enumerate() {
         let lcp_len = sa.lcp_lens[i];
         let vins = ancestor_lcp_len(unsafe { &mut *last }, lcp_len);
-        let dv = vins.root_concat_len();
+        let dv = vins.path_len;
         if dv == lcp_len {
             // The concatenation of the labels from root-to-vins equals
             // the longest common prefix of SA[i-1] and SA[i].
             // This means that the suffix we're adding contains the
             // entirety of `vins`, which in turn means we can simply
             // add it as a new leaf.
+            let mut node = Node::leaf(sufstart + lcp_len,
+                                      sa.text.len() as u32);
+            node.add_parent(vins);
 
-            let mut node = box Node::new(sf!(sa.text, sufstart + lcp_len));
-            let first_char = node.key();
-
+            let first_char = st.key(&*node);
             // TODO: I don't yet understand why this invariant is true,
             // but it has to be---otherwise the algorithm is flawed. ---AG
             assert!(!vins.children.contains_key(&first_char));
 
             last = &mut *node;
-            node.parent = Rawlink::some(vins);
-            node.terminal = true;
             vins.children.insert(first_char, node);
         } else if dv < lcp_len {
             // In this case, `vins`'s right-most child overlaps with the
@@ -55,31 +54,30 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             let mut rnode = vins.children.remove(&rkey).unwrap();
 
             // 2) create new internal node (full path label == LCP)
-            let mut int_node = box Node::new(
-                s!(sa.text, sa.indices[i-1] + dv, sa.indices[i-1] + lcp_len));
-            int_node.parent = Rawlink::some(vins);
-            int_node.terminal = false;
+            let mut int_node = Node::internal(sa.indices[i-1] + dv,
+                                              sa.indices[i-1] + lcp_len);
+            int_node.add_parent(vins);
 
             // 3) Attach old node to new internal node and update
             // the label.
-            rnode.label =
-                s!(sa.text,
-                   sa.indices[i-1] + lcp_len,
-                   sa.indices[i-1] + rnode.root_concat_len());
-            rnode.parent = Rawlink::some(&mut *int_node);
+            rnode.start = sa.indices[i-1] + lcp_len;
+            rnode.end = sa.indices[i-1] + rnode.path_len;
+            rnode.add_parent(&mut *int_node);
 
             // 4) Create new leaf node with the current suffix, but with
             // the lcp trimmed.
-            let mut leaf = box Node::new(sf!(sa.text, sufstart + lcp_len));
+            let mut leaf = Node::leaf(sufstart + lcp_len,
+                                      sa.text.len() as u32);
+            leaf.add_parent(&mut *int_node);
+
+            // Update the last node we visited.
             last = &mut *leaf;
-            leaf.parent = Rawlink::some(&mut *int_node);
-            leaf.terminal = true;
 
             // Finally, attach all of the nodes together.
-            assert!(rnode.key() != leaf.key()); // why is this true? ---AG
-            int_node.children.insert(rnode.key(), rnode);
-            int_node.children.insert(leaf.key(), leaf);
-            vins.children.insert(int_node.key(), int_node);
+            assert!(st.key(&*rnode) != st.key(&*leaf)); // why? ---AG
+            int_node.children.insert(st.key(&*rnode), rnode);
+            int_node.children.insert(st.key(&*leaf), leaf);
+            vins.children.insert(st.key(&*int_node), int_node);
         } else {
             unreachable!()
         }
@@ -87,19 +85,15 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
     st
 }
 
-fn ancestor_lcp_len<'a, 's>(start_node: &'a mut Node<'s>, lcp_len: u32)
-                           -> &'a mut Node<'s> {
+fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: u32) -> &'a mut Node {
     // Is it worth making a mutable `Ancestors` iterator?
     // If this is the only place that needs it, probably not. ---AG
-    let mut cur = start_node;
+    let mut cur = start;
     loop {
-        // FIXME: root_concat_len traverses all the way to the root!
-        // So I think that makes this function `O(logn * logn)`. Owch.
-        // We need to store the full path label length I think.
-        if cur.root_concat_len() <= lcp_len {
+        if cur.path_len <= lcp_len {
             return cur;
         }
-        match cur.parent.resolve() {
+        match cur.parent.resolve_mut() {
             // We've reached the root, so we have no choice but to use it.
             None => break,
             Some(p) => { cur = p; }
@@ -169,7 +163,7 @@ mod tests {
                 ancestors.reverse();
 
                 let suffix: String =
-                    ancestors.iter().map(|node| node.label).collect();
+                    ancestors.iter().map(|&node| st.label(node)).collect();
                 if suffix != sa.suffix(i) {
                     return false;
                 }
@@ -189,10 +183,10 @@ mod tests {
         // debug!("{}", st);
         // debug!("NODE: {}", node);
         for n in st.root.leaves() {
-            debug!("{}", n.label);
+            debug!("{}", st.label(n));
         }
         // for ancestor in node.ancestors().skip(1) {
-            // debug!("ancestor: {}", ancestor.label);
+            // debug!("ancestor: {}", st.label(ancestor));
         // }
     }
 }

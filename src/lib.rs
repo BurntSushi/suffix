@@ -71,13 +71,15 @@ impl<'s> fmt::Show for SuffixArray<'s> {
 
 pub struct SuffixTree<'s> {
     text: &'s str,
-    root: Box<Node<'s>>,
+    root: Box<Node>,
 }
 
-struct Node<'s> {
-    label: &'s str,
-    children: BTreeMap<char, Box<Node<'s>>>,
-    parent: Rawlink<Node<'s>>,
+struct Node {
+    start: u32,
+    end: u32,
+    path_len: u32,
+    children: BTreeMap<char, Box<Node>>,
+    parent: Rawlink<Node>,
     terminal: bool,
 }
 
@@ -91,42 +93,66 @@ impl<'s> SuffixTree<'s> {
     fn init(s: &'s str) -> SuffixTree<'s> {
         SuffixTree {
             text: s,
-            root: box Node::new(s[0..0]),
+            root: Node::leaf(0, 0),
         }
+    }
+
+    fn root(&self) -> &Node {
+        &*self.root
+    }
+
+    fn label(&self, node: &Node) -> &'s str {
+        self.text[node.start as uint .. node.end as uint]
+    }
+
+    fn key(&self, node: &Node) -> char {
+        self.label(node).char_at(0)
     }
 }
 
-impl<'s> Node<'s> {
-    fn new(label: &'s str) -> Node<'s> {
-        Node {
-            label: label,
+impl Node {
+    fn leaf(start: u32, end: u32) -> Box<Node> {
+        box Node {
+            start: start,
+            end: end,
+            path_len: 0,
             children: BTreeMap::new(),
             parent: Rawlink::none(),
             terminal: true,
         }
     }
 
-    fn parent(&self) -> Option<&Node<'s>> {
-        self.parent.resolve_immut()
+    fn internal(start: u32, end: u32) -> Box<Node> {
+        let mut node = Node::leaf(start, end);
+        node.terminal = false;
+        node
     }
 
-    fn parent_mut(&mut self) -> Option<&mut Node<'s>> {
+    fn len(&self) -> u32 {
+        self.end - self.start
+    }
+
+    fn parent(&self) -> Option<&Node> {
         self.parent.resolve()
     }
 
-    fn children<'t>(&'t self) -> Children<'s, 't> {
+    fn parent_mut(&mut self) -> Option<&mut Node> {
+        self.parent.resolve_mut()
+    }
+
+    fn children<'t>(&'t self) -> Children<'t> {
         Children { it: self.children.values() }
     }
 
-    fn ancestors<'t>(&'t self) -> Ancestors<'s, 't> {
+    fn ancestors<'t>(&'t self) -> Ancestors<'t> {
         Ancestors { cur: Some(self) }
     }
 
-    fn preorder<'t>(&'t self) -> Preorder<'s, 't> {
+    fn preorder<'t>(&'t self) -> Preorder<'t> {
         Preorder::new(self)
     }
 
-    fn leaves<'t>(&'t self) -> Leaves<'s, 't> {
+    fn leaves<'t>(&'t self) -> Leaves<'t> {
         Leaves { it: self.preorder() }
     }
 
@@ -135,15 +161,12 @@ impl<'s> Node<'s> {
     }
 
     fn is_root(&self) -> bool {
-        self.parent.resolve_immut().is_none()
+        self.parent.resolve().is_none()
     }
 
-    fn key(&self) -> char {
-        self.label.char_at(0)
-    }
-
-    fn root_concat_len(&self) -> u32 {
-        self.ancestors().map(|node| node.label.len()).sum() as u32
+    fn add_parent(&mut self, node: &mut Node) {
+        self.parent = Rawlink::some(node);
+        self.path_len = node.path_len + self.len();
     }
 
     fn depth(&self) -> u32 {
@@ -164,12 +187,12 @@ impl<T> Rawlink<T> {
     }
 
     /// Convert the `Rawlink` into an immutable Option value.
-    fn resolve_immut<'a>(&self) -> Option<&'a T> {
+    fn resolve<'a>(&self) -> Option<&'a T> {
         unsafe { self.p.as_ref() }
     }
 
     /// Convert the `Rawlink` into a mutable Option value.
-    fn resolve<'a>(&mut self) -> Option<&'a mut T> {
+    fn resolve_mut<'a>(&mut self) -> Option<&'a mut T> {
         unsafe { self.p.as_mut() }
     }
 
@@ -181,36 +204,42 @@ impl<T> Rawlink<T> {
 
 impl<'s> fmt::Show for SuffixTree<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt<'s>(f: &mut fmt::Formatter, st: &SuffixTree<'s>,
+                   node: &Node, depth: uint) -> fmt::Result {
+            let indent: String = iter::repeat(' ').take(depth * 2).collect();
+            if node.is_root() {
+                try!(writeln!(f, "ROOT"));
+            } else {
+                try!(writeln!(f, "{}{}", indent, st.label(node)));
+            }
+            for child in node.children() {
+                try!(fmt(f, st, child, depth + 1));
+            }
+            Ok(())
+        }
         try!(writeln!(f, "\n-----------------------------------------"));
         try!(writeln!(f, "SUFFIX TREE"));
         try!(writeln!(f, "text: {}", self.text));
-        try!(self.root.fmt(f));
+        try!(fmt(f, self, self.root(), 0));
         writeln!(f, "-----------------------------------------")
     }
 }
 
-impl<'s> fmt::Show for Node<'s> {
+impl fmt::Show for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let depth = self.depth() as uint;
-        let indent: String = iter::repeat(' ').take(depth * 2).collect();
-        if self.is_root() {
-            try!(writeln!(f, "ROOT"));
-        } else {
-            try!(writeln!(f, "{}{}", indent, self.label));
-        }
-        for ref node in self.children.values() {
-            try!(node.fmt(f));
-        }
-        Ok(())
+        write!(f, "Node {{ start: {}, end: {}, len(children): {}, \
+                           terminal? {}, parent? {} }}",
+               self.start, self.end, self.children.len(), self.terminal,
+               self.parent.resolve().map(|_| "yes").unwrap_or("no"))
     }
 }
 
-struct Ancestors<'s: 't, 't> {
-    cur: Option<&'t Node<'s>>,
+struct Ancestors<'t> {
+    cur: Option<&'t Node>,
 }
 
-impl<'s, 't> Iterator<&'t Node<'s>> for Ancestors<'s, 't> {
-    fn next(&mut self) -> Option<&'t Node<'s>> {
+impl<'t> Iterator<&'t Node> for Ancestors<'t> {
+    fn next(&mut self) -> Option<&'t Node> {
         if let Some(node) = self.cur {
             self.cur = node.parent();
             Some(node)
@@ -220,12 +249,12 @@ impl<'s, 't> Iterator<&'t Node<'s>> for Ancestors<'s, 't> {
     }
 }
 
-struct Children<'s: 't, 't> {
-    it: btree_map::Values<'t, char, Box<Node<'s>>>,
+struct Children<'t> {
+    it: btree_map::Values<'t, char, Box<Node>>,
 }
 
-impl<'s, 't> Iterator<&'t Node<'s>> for Children<'s, 't> {
-    fn next(&mut self) -> Option<&'t Node<'s>> {
+impl<'t> Iterator<&'t Node> for Children<'t> {
+    fn next(&mut self) -> Option<&'t Node> {
         self.it.next().map(|n| &**n)
     }
 
@@ -234,26 +263,26 @@ impl<'s, 't> Iterator<&'t Node<'s>> for Children<'s, 't> {
     }
 }
 
-impl<'s, 't> DoubleEndedIterator<&'t Node<'s>> for Children<'s, 't> {
-    fn next_back(&mut self) -> Option<&'t Node<'s>> {
+impl<'t> DoubleEndedIterator<&'t Node> for Children<'t> {
+    fn next_back(&mut self) -> Option<&'t Node> {
         self.it.next_back().map(|n| &**n)
     }
 }
 
-impl<'s, 't> ExactSizeIterator<&'t Node<'s>> for Children<'s, 't> {}
+impl<'t> ExactSizeIterator<&'t Node> for Children<'t> {}
 
-struct Preorder<'s: 't, 't> {
-    stack: Vec<&'t Node<'s>>,
+struct Preorder<'t> {
+    stack: Vec<&'t Node>,
 }
 
-impl<'s, 't> Preorder<'s, 't> {
-    fn new(start: &'t Node<'s>) -> Preorder<'s, 't> {
+impl<'t> Preorder<'t> {
+    fn new(start: &'t Node) -> Preorder<'t> {
         Preorder { stack: vec![start] }
     }
 }
 
-impl<'s, 't> Iterator<&'t Node<'s>> for Preorder<'s, 't> {
-    fn next(&mut self) -> Option<&'t Node<'s>> {
+impl<'t> Iterator<&'t Node> for Preorder<'t> {
+    fn next(&mut self) -> Option<&'t Node> {
         match self.stack.pop() {
             None => None,
             Some(node) => {
@@ -264,12 +293,12 @@ impl<'s, 't> Iterator<&'t Node<'s>> for Preorder<'s, 't> {
     }
 }
 
-struct Leaves<'s: 't, 't> {
-    it: Preorder<'s, 't>,
+struct Leaves<'t> {
+    it: Preorder<'t>,
 }
 
-impl<'s, 't> Iterator<&'t Node<'s>> for Leaves<'s, 't> {
-    fn next(&mut self) -> Option<&'t Node<'s>> {
+impl<'t> Iterator<&'t Node> for Leaves<'t> {
+    fn next(&mut self) -> Option<&'t Node> {
         for n in self.it {
             if n.is_terminal() {
                 return Some(n);
