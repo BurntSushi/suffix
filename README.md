@@ -36,6 +36,15 @@ accessible description of the algorithm that I think I understand. There also
 exists a linear time construction of the LCP array via induced sorting that is
 described in [(Fischer, 2011)](http://arxiv.org/pdf/1101.3448.pdf).
 
+OK, I've implemented the algorithm from Nong et al. in `src/array.rs`.
+QuickCheck says it's equivalent to the naive implementation, which gives me
+some confidence that it is actually correct. But there is still a lot of work
+to be done because it's performing way more allocation than is necessary. It
+also has a reliance on a sentinel that I'd like to remove. Although, it may be
+useful when I adapt this to generalized suffix arrays. Moreover, using the
+sentinel can be provably correct because we can use an invalid Unicode scalar
+value.
+
 Clearly, I am still in the "how do I implement fast construction" algorithm
 phase. I haven't given much thought yet to a public API and what kinds of
 operations we should expose. Certainly, it would be easier to do suffix array
