@@ -427,6 +427,7 @@ fn chrcmp(c1: &u32, c2: &u32) -> Ordering {
 
 #[cfg(test)]
 mod tests {
+    use quickcheck::{TestResult, quickcheck};
     use super::{naive, sais};
 
     #[test]
@@ -461,6 +462,30 @@ mod tests {
         assert_eq!(sa.lcp(2), "");
         assert_eq!(sa.lcp(3), "");
         assert_eq!(sa.lcp(4), "p");
+    }
+
+    #[test]
+    fn sais_basic1() {
+        assert_eq!(naive("apple"), sais("apple"));
+    }
+
+    #[test]
+    fn sais_basic2() {
+        assert_eq!(naive("banana"), sais("banana"));
+    }
+
+    #[test]
+    fn sais_basic3() {
+        assert_eq!(naive("mississippi"), sais("mississippi"));
+    }
+
+    #[test]
+    fn qc_naive_equals_sais() {
+        fn prop(s: String) -> TestResult {
+            if s.is_empty() { return TestResult::discard(); }
+            TestResult::from_bool(naive(&*s) == sais(&*s))
+        }
+        quickcheck(prop as fn(String) -> TestResult);
     }
 
     #[test]
