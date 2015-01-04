@@ -1,6 +1,7 @@
-use std::cmp::Ordering::{Equal, Greater, Less};
+use std::cmp::Ordering::{self, Equal, Greater, Less};
 use std::collections::hash_map::{HashMap, Entry};
 use std::iter::{range, repeat};
+use std::ops::IndexMut;
 
 use SuffixArray;
 use self::SuffixType::{Ascending, Descending, Valley};
@@ -200,7 +201,7 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     vec![]
 }
 
-#[deriving(Clone, Copy, Eq, Ord, Show)]
+#[derive(Clone, Copy, Eq, Ord, Show)]
 enum SuffixType {
     Ascending,
     Descending,
@@ -268,7 +269,7 @@ fn suffix_types(chars: &[u32]) -> Vec<SuffixType> {
     stypes
 }
 
-#[deriving(Copy, Clone, Show)]
+#[derive(Copy, Clone, Show)]
 struct WString {
     sequence: uint,
     start: uint,

@@ -2,7 +2,7 @@
 
 #![crate_name = "suffix"]
 #![doc(html_root_url = "http://burntsushi.net/rustdoc/suffix")]
-#![feature(macro_rules, phase, slicing_syntax)]
+#![feature(associated_types, macro_rules, phase, slicing_syntax)]
 #![experimental]
 
 #![allow(dead_code, unused_imports, unused_variables)]
@@ -10,10 +10,10 @@
 #[phase(plugin, link)] extern crate log;
 #[cfg(test)] extern crate quickcheck;
 
-use std::collections::btree_map::{mod, BTreeMap};
+use std::collections::btree_map::{self, BTreeMap};
 use std::collections::RingBuf;
 use std::fmt;
-use std::iter::{mod, AdditiveIterator};
+use std::iter::{self, AdditiveIterator};
 use std::mem;
 use std::ptr;
 
@@ -243,7 +243,9 @@ struct Ancestors<'t> {
     cur: Option<&'t Node>,
 }
 
-impl<'t> Iterator<&'t Node> for Ancestors<'t> {
+impl<'t> Iterator for Ancestors<'t> {
+    type Item = &'t Node;
+
     fn next(&mut self) -> Option<&'t Node> {
         if let Some(node) = self.cur {
             self.cur = node.parent();
@@ -258,7 +260,9 @@ struct Children<'t> {
     it: btree_map::Values<'t, char, Box<Node>>,
 }
 
-impl<'t> Iterator<&'t Node> for Children<'t> {
+impl<'t> Iterator for Children<'t> {
+    type Item = &'t Node;
+
     fn next(&mut self) -> Option<&'t Node> {
         self.it.next().map(|n| &**n)
     }
@@ -268,13 +272,13 @@ impl<'t> Iterator<&'t Node> for Children<'t> {
     }
 }
 
-impl<'t> DoubleEndedIterator<&'t Node> for Children<'t> {
+impl<'t> DoubleEndedIterator for Children<'t> {
     fn next_back(&mut self) -> Option<&'t Node> {
         self.it.next_back().map(|n| &**n)
     }
 }
 
-impl<'t> ExactSizeIterator<&'t Node> for Children<'t> {}
+impl<'t> ExactSizeIterator for Children<'t> {}
 
 struct Preorder<'t> {
     stack: Vec<&'t Node>,
@@ -286,7 +290,9 @@ impl<'t> Preorder<'t> {
     }
 }
 
-impl<'t> Iterator<&'t Node> for Preorder<'t> {
+impl<'t> Iterator for Preorder<'t> {
+    type Item = &'t Node;
+
     fn next(&mut self) -> Option<&'t Node> {
         match self.stack.pop() {
             None => None,
@@ -302,7 +308,9 @@ struct Leaves<'t> {
     it: Preorder<'t>,
 }
 
-impl<'t> Iterator<&'t Node> for Leaves<'t> {
+impl<'t> Iterator for Leaves<'t> {
+    type Item = &'t Node;
+
     fn next(&mut self) -> Option<&'t Node> {
         for n in self.it {
             if n.has_terminals() {
@@ -319,7 +327,9 @@ struct SuffixIndices<'t> {
     cur_suffix: uint,
 }
 
-impl<'t> Iterator<uint> for SuffixIndices<'t> {
+impl<'t> Iterator for SuffixIndices<'t> {
+    type Item = uint;
+
     fn next(&mut self) -> Option<uint> {
         if let Some(node) = self.node {
             if self.cur_suffix < node.suffixes.len() {
