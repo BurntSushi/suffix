@@ -17,27 +17,13 @@ use std::iter::{mod, AdditiveIterator};
 use std::mem;
 use std::ptr;
 
-pub use array_naive::construct as array_naive;
-
-// slice
-macro_rules! s {
-    ($e:expr, $from:expr, $to:expr) => ($e[$from as uint .. $to as uint]);
-}
-
-// slice to
-macro_rules! st {
-    ($e:expr, $to:expr) => ($e[.. $to as uint]);
-}
-
-// slice from
-macro_rules! sf {
-    ($e:expr, $from:expr) => ($e[$from as uint ..]);
-}
+pub use array::naive as array_naive;
 
 pub struct SuffixArray<'s> {
     text: &'s str,
-    indices: Vec<u32>,
-    lcp_lens: Vec<u32>,
+    table: Vec<uint>,
+    inverse: Vec<uint>,
+    lcp_lens: Vec<uint>,
 }
 
 impl<'s> SuffixArray<'s> {
@@ -46,11 +32,11 @@ impl<'s> SuffixArray<'s> {
     }
 
     pub fn suffix(&self, i: uint) -> &str {
-        sf!(self.text, self.indices[i])
+        self.text.slice_from(self.table[i])
     }
 
     pub fn lcp(&self, i: uint) -> &str {
-        s!(self.text, self.indices[i], self.indices[i] + self.lcp_lens[i])
+        self.text.slice(self.table[i], self.table[i] + self.lcp_lens[i])
     }
 }
 
@@ -59,8 +45,13 @@ impl<'s> fmt::Show for SuffixArray<'s> {
         try!(writeln!(f, "\n-----------------------------------------"));
         try!(writeln!(f, "SUFFIX ARRAY"));
         try!(writeln!(f, "text: {}", self.text));
-        for (i, &sufstart) in self.indices.iter().enumerate() {
-            try!(writeln!(f, "suffix[{}:] {}", sufstart, self.suffix(i)));
+        for (rank, &sufstart) in self.table.iter().enumerate() {
+            try!(writeln!(f, "suffix[{}] {}, {}",
+                          rank, sufstart, self.suffix(rank)));
+        }
+        for (sufstart, &rank) in self.inverse.iter().enumerate() {
+            try!(writeln!(f, "inverse[{}] {}, {}",
+                          sufstart, rank, self.suffix(rank)));
         }
         for (i, &len) in self.lcp_lens.iter().enumerate() {
             try!(writeln!(f, "lcp_length[{}] {}", i, len));
@@ -75,12 +66,12 @@ pub struct SuffixTree<'s> {
 }
 
 struct Node {
-    start: u32,
-    end: u32,
-    path_len: u32,
-    children: BTreeMap<char, Box<Node>>,
     parent: Rawlink<Node>,
-    terminal: bool,
+    children: BTreeMap<char, Box<Node>>,
+    suffixes: Vec<uint>,
+    start: uint,
+    end: uint,
+    path_len: uint,
 }
 
 struct Rawlink<T> {
@@ -93,7 +84,7 @@ impl<'s> SuffixTree<'s> {
     fn init(s: &'s str) -> SuffixTree<'s> {
         SuffixTree {
             text: s,
-            root: Node::leaf(0, 0),
+            root: Node::leaf(0, 0, 0),
         }
     }
 
@@ -102,7 +93,12 @@ impl<'s> SuffixTree<'s> {
     }
 
     fn label(&self, node: &Node) -> &'s str {
-        self.text[node.start as uint .. node.end as uint]
+        self.text[node.start .. node.end]
+    }
+
+    fn suffix(&self, node: &Node) -> &'s str {
+        assert!(node.suffixes.len() > 0);
+        self.text.slice_from(node.suffixes[0])
     }
 
     fn key(&self, node: &Node) -> char {
@@ -111,24 +107,29 @@ impl<'s> SuffixTree<'s> {
 }
 
 impl Node {
-    fn leaf(start: u32, end: u32) -> Box<Node> {
+    fn leaf(sufstart: uint, start: uint, end: uint) -> Box<Node> {
         box Node {
+            parent: Rawlink::none(),
+            children: BTreeMap::new(),
+            suffixes: vec![sufstart],
             start: start,
             end: end,
             path_len: 0,
-            children: BTreeMap::new(),
-            parent: Rawlink::none(),
-            terminal: true,
         }
     }
 
-    fn internal(start: u32, end: u32) -> Box<Node> {
-        let mut node = Node::leaf(start, end);
-        node.terminal = false;
-        node
+    fn internal(start: uint, end: uint) -> Box<Node> {
+        box Node {
+            parent: Rawlink::none(),
+            children: BTreeMap::new(),
+            suffixes: vec![],
+            start: start,
+            end: end,
+            path_len: 0,
+        }
     }
 
-    fn len(&self) -> u32 {
+    fn len(&self) -> uint {
         self.end - self.start
     }
 
@@ -156,8 +157,12 @@ impl Node {
         Leaves { it: self.preorder() }
     }
 
-    fn is_terminal(&self) -> bool {
-        self.terminal
+    fn suffix_indices<'t>(&'t self) -> SuffixIndices<'t> {
+        SuffixIndices { it: self.leaves(), node: None, cur_suffix: 0 }
+    }
+
+    fn has_terminals(&self) -> bool {
+        self.suffixes.len() > 0
     }
 
     fn is_root(&self) -> bool {
@@ -169,8 +174,8 @@ impl Node {
         self.path_len = node.path_len + self.len();
     }
 
-    fn depth(&self) -> u32 {
-        (self.ancestors().count() - 1) as u32
+    fn depth(&self) -> uint {
+        self.ancestors().count() - 1
     }
 }
 
@@ -228,8 +233,8 @@ impl<'s> fmt::Show for SuffixTree<'s> {
 impl fmt::Show for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Node {{ start: {}, end: {}, len(children): {}, \
-                           terminal? {}, parent? {} }}",
-               self.start, self.end, self.children.len(), self.terminal,
+                           terminals: {}, parent? {} }}",
+               self.start, self.end, self.children.len(), self.suffixes.len(),
                self.parent.resolve().map(|_| "yes").unwrap_or("no"))
     }
 }
@@ -300,7 +305,7 @@ struct Leaves<'t> {
 impl<'t> Iterator<&'t Node> for Leaves<'t> {
     fn next(&mut self) -> Option<&'t Node> {
         for n in self.it {
-            if n.is_terminal() {
+            if n.has_terminals() {
                 return Some(n);
             }
         }
@@ -308,5 +313,28 @@ impl<'t> Iterator<&'t Node> for Leaves<'t> {
     }
 }
 
-mod array_naive;
+struct SuffixIndices<'t> {
+    it: Leaves<'t>,
+    node: Option<&'t Node>,
+    cur_suffix: uint,
+}
+
+impl<'t> Iterator<uint> for SuffixIndices<'t> {
+    fn next(&mut self) -> Option<uint> {
+        if let Some(node) = self.node {
+            if self.cur_suffix < node.suffixes.len() {
+                self.cur_suffix += 1;
+                return Some(node.suffixes[self.cur_suffix - 1]);
+            }
+            self.node = None;
+            self.cur_suffix = 0;
+        }
+        match self.it.next() {
+            None => None,
+            Some(leaf) => { self.node = Some(leaf); self.next() }
+        }
+    }
+}
+
+mod array;
 mod to_suffix_tree;

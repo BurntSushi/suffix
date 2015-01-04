@@ -3,7 +3,7 @@ use {SuffixArray, SuffixTree, Node, Rawlink, array_naive};
 pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
     let mut st = SuffixTree::init(&*sa.text);
     let mut last: *mut Node = &mut *st.root;
-    for (i, &sufstart) in sa.indices.iter().enumerate() {
+    for (i, &sufstart) in sa.table.iter().enumerate() {
         let lcp_len = sa.lcp_lens[i];
         let vins = ancestor_lcp_len(unsafe { &mut *last }, lcp_len);
         let dv = vins.path_len;
@@ -13,8 +13,8 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             // This means that the suffix we're adding contains the
             // entirety of `vins`, which in turn means we can simply
             // add it as a new leaf.
-            let mut node = Node::leaf(sufstart + lcp_len,
-                                      sa.text.len() as u32);
+            let mut node = Node::leaf(
+                sufstart, sufstart + lcp_len, sa.text.len());
             node.add_parent(vins);
 
             let first_char = st.key(&*node);
@@ -45,7 +45,8 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             // this suffix can be at *most* len(last). Therefore, when
             // `vins` is `last`, we have that `len(last) >= len(lcp)`,
             // which implies that `len(last)` (== `dv`) can never be less
-            // than `len(lcp)` (== `lcp_len`).
+            // than `len(lcp)` (== `lcp_len`). Which in turn implies that
+            // we can't be here, since `dv < lcp_len`.
             assert!(vins.children.len() > 0);
             // Thus, we can pick the right-most child with impunity.
             let rkey = *vins.children.keys().next_back().unwrap();
@@ -54,20 +55,20 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             let mut rnode = vins.children.remove(&rkey).unwrap();
 
             // 2) create new internal node (full path label == LCP)
-            let mut int_node = Node::internal(sa.indices[i-1] + dv,
-                                              sa.indices[i-1] + lcp_len);
+            let mut int_node = Node::internal(sa.table[i-1] + dv,
+                                              sa.table[i-1] + lcp_len);
             int_node.add_parent(vins);
 
             // 3) Attach old node to new internal node and update
             // the label.
-            rnode.start = sa.indices[i-1] + lcp_len;
-            rnode.end = sa.indices[i-1] + rnode.path_len;
+            rnode.start = sa.table[i-1] + lcp_len;
+            rnode.end = sa.table[i-1] + rnode.path_len;
             rnode.add_parent(&mut *int_node);
 
             // 4) Create new leaf node with the current suffix, but with
             // the lcp trimmed.
-            let mut leaf = Node::leaf(sufstart + lcp_len,
-                                      sa.text.len() as u32);
+            let mut leaf = Node::leaf(
+                sufstart, sufstart + lcp_len, sa.text.len());
             leaf.add_parent(&mut *int_node);
 
             // Update the last node we visited.
@@ -85,7 +86,7 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
     st
 }
 
-fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: u32) -> &'a mut Node {
+fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: uint) -> &'a mut Node {
     // Is it worth making a mutable `Ancestors` iterator?
     // If this is the only place that needs it, probably not. ---AG
     let mut cur = start;
@@ -141,7 +142,7 @@ mod tests {
             let sa = array_naive(&*s);
             let st = sa.to_suffix_tree();
             for node in st.root.preorder() {
-                if !node.is_terminal() && node.children.len() < 2 {
+                if !node.has_terminals() && node.children.len() < 2 {
                     return false;
                 }
             }
@@ -158,13 +159,8 @@ mod tests {
             // is that it's stupidly simple.
             let sa = array_naive(&*s);
             let st = sa.to_suffix_tree();
-            for (i, leaf) in st.root.leaves().enumerate() {
-                let mut ancestors: Vec<&Node> = leaf.ancestors().collect();
-                ancestors.reverse();
-
-                let suffix: String =
-                    ancestors.iter().map(|&node| st.label(node)).collect();
-                if suffix != sa.suffix(i) {
+            for (i, sufi) in st.root.suffix_indices().enumerate() {
+                if st.text[sufi..] != sa.suffix(i) {
                     return false;
                 }
             }
