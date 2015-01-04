@@ -19,6 +19,7 @@ use std::ptr;
 
 pub use array::naive as array_naive;
 
+#[derive(Eq, PartialEq)]
 pub struct SuffixArray<'s> {
     text: &'s str,
     table: Vec<uint>,

@@ -1,13 +1,12 @@
 use std::cmp::Ordering::{self, Equal, Greater, Less};
 use std::collections::hash_map::{HashMap, Entry};
 use std::iter::{range, repeat};
-use std::ops::IndexMut;
 
 use SuffixArray;
 use self::SuffixType::{Ascending, Descending, Valley};
 
 const SENTINEL: u32 = 0x110000;
-const INVALID: u32 = 0x110001;
+const INVALID: uint = 0x110001; // this is wrong
 
 pub fn naive<'s>(s: &'s str) -> SuffixArray<'s> {
     let mut table: Vec<_> = s.char_indices().map(|(i, _)| i).collect();
@@ -86,7 +85,9 @@ fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
     let char_sa = sais_vec(&*chars);
     let mut byte_sa = Vec::with_capacity(char_sa.len());
     for &char_sufstart in char_sa.iter() {
-        byte_sa.push(chari[char_sufstart]);
+        if chari[char_sufstart] < chars.len() {
+            byte_sa.push(chari[char_sufstart]);
+        }
     }
     make_suffix_array(text, byte_sa)
 }
@@ -171,34 +172,81 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     // But, we still have sentinels, which tweak the ordering of characters.
     // If we get rid of sentinels, a BTreeMap is trivial to use.
     // Otherwise, we need to newtype a character and define an ordering on it.
-    let mut sa: Vec<uint> = repeat(INVALID as uint).take(chars.len()).collect();
-    let mut bins: HashMap<u32, uint> = HashMap::new();
+    let mut sa: Vec<uint> = repeat(INVALID).take(chars.len()).collect();
+    let mut bin_sizes: HashMap<u32, uint> = HashMap::new();
     for &c in chars.iter() {
-        match bins.entry(c) {
+        match bin_sizes.entry(c) {
             Entry::Vacant(v) => { v.set(1); }
             Entry::Occupied(mut v) => { *v.get_mut() += 1; }
         }
     }
-    let mut alphas: Vec<u32> = bins.keys().map(|&c| c).collect();
+
+    // Find the alphas in sorted order. These correspond to the labels of
+    // each bin.
+    let mut alphas: Vec<u32> = bin_sizes.keys().map(|&c| c).collect();
     alphas.sort_by(chrcmp);
+
+    // These are pointers to the start/end of each bin. They are regenerated
+    // at each step.
+    let mut bin_ptrs: HashMap<u32, uint> = HashMap::new();
+
+    // Find the index of the last element of each bin in `sa`.
     let mut sum = 0u;
     for &c in alphas.iter() {
-        sum += bins[c];
-        bins[c] = sum - 1;
+        sum += bin_sizes[c];
+        bin_ptrs.insert(c, sum - 1);
     }
-    debug!("BINS: {}", bins);
-    debug!("ALPHABET: {}", chrs(&*alphas));
 
-    // Insert the valley suffixes...
+    // Insert the valley suffixes.
     for wstr in wstrs_sorted.iter().rev() {
-        // let bin_name = wstr.index(&*chars, wstr.start);
-        let bin = bins.index_mut(&chars[wstr.start]);
-        sa[*bin] = wstr.start;
-        if *bin > 0 { *bin -= 1; }
+        let binp = &mut bin_ptrs[chars[wstr.start]];
+        sa[*binp] = wstr.start;
+        if *binp > 0 { *binp -= 1; }
     }
-    debug!("SA: {}", sa);
+    debug!("after step 0: {}", sa);
 
-    vec![]
+    // Now find the start of each bin.
+    let mut sum = 0u;
+    for &c in alphas.iter() {
+        bin_ptrs.insert(c, sum);
+        sum += bin_sizes[c];
+    }
+
+    // Insert the descending suffixes.
+    for i in range(0, sa.len()) {
+        let sufi = sa[i];
+        if sufi == INVALID || sufi == 0 {
+            continue
+        }
+        if stypes[sufi - 1].is_desc() {
+            let binp = &mut bin_ptrs[chars[sufi - 1]];
+            sa[*binp] = sufi - 1;
+            *binp += 1;
+        }
+    }
+    debug!("after step 1: {}", sa);
+
+    // ... and find the end of each bin again.
+    let mut sum = 0u;
+    for &c in alphas.iter() {
+        sum += bin_sizes[c];
+        bin_ptrs.insert(c, sum - 1);
+    }
+
+    // Insert the ascending suffixes.
+    for i in range(0, sa.len()).rev() {
+        let sufi = sa[i];
+        if sufi == INVALID || sufi == 0 {
+            continue
+        }
+        if stypes[sufi - 1].is_asc() {
+            let binp = &mut bin_ptrs[chars[sufi - 1]];
+            sa[*binp] = sufi - 1;
+            *binp -= 1;
+        }
+    }
+    debug!("after step 2: {}", sa);
+    sa
 }
 
 #[derive(Clone, Copy, Eq, Ord, Show)]
@@ -359,7 +407,7 @@ fn chrs(ns: &[u32]) -> String {
 fn chr(n: u32) -> char {
     if n == SENTINEL {
         '$'
-    } else if n == INVALID {
+    } else if n == INVALID as u32 { // wrong
         '?'
     } else {
         ::std::char::from_u32(n).unwrap()
@@ -419,5 +467,7 @@ mod tests {
     fn array_scratch() {
         let sa = sais("tgtgtgtgcaccg");
         debug!("{}", sa);
+
+        assert_eq!(sa, naive("tgtgtgtgcaccg"));
     }
 }
