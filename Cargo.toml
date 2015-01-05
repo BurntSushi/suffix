@@ -10,5 +10,20 @@ readme = "README.md"
 keywords = ["suffix", "text", "search", "index"]
 license = "Unlicense"
 
+[lib]
+name = "suffix"
+path = "src/lib.rs"
+
+[[bin]]
+name = "suffix"
+path = "src/main.rs"
+doc = false
+test = false
+bench = false
+
+[dependencies]
+rustc-serialize = "*"
+docopt = "*"
+
 [dev-dependencies]
 quickcheck = "*"

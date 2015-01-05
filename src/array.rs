@@ -9,9 +9,13 @@ const SENTINEL: u32 = 0x110000;
 const INVALID: uint = 0x110001; // this is wrong
 
 pub fn naive<'s>(s: &'s str) -> SuffixArray<'s> {
+    make_suffix_array(s, naive_table(s))
+}
+
+pub fn naive_table<'s>(s: &'s str) -> Vec<uint> {
     let mut table: Vec<_> = s.char_indices().map(|(i, _)| i).collect();
     table.sort_by(|&a, &b| s[a..].cmp(s[b..]));
-    make_suffix_array(s, table)
+    table
 }
 
 fn make_suffix_array<'s>(s: &'s str, table: Vec<uint>) -> SuffixArray<'s> {
@@ -70,7 +74,11 @@ fn lcp_len(a: &str, b: &str) -> uint {
     a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count()
 }
 
-fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
+pub fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
+    make_suffix_array(text, sais_table(text))
+}
+
+pub fn sais_table<'s>(text: &'s str) -> Vec<uint> {
     let mut chars = Vec::with_capacity(text.len());
     let mut chari = Vec::with_capacity(text.len());
     for (i, c) in text.char_indices() {
@@ -82,17 +90,19 @@ fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
     chars.push(SENTINEL);
     chari.push(chars.len());
 
+    println!("calling sais_vec");
     let char_sa = sais_vec(&*chars);
     let mut byte_sa = Vec::with_capacity(char_sa.len());
-    for &char_sufstart in char_sa.iter() {
-        if chari[char_sufstart] < chars.len() {
-            byte_sa.push(chari[char_sufstart]);
-        }
+    // Drop the first suffix, because it's always the sentinel, which we've
+    // artificially inserted into the caller's string.
+    for &char_sufstart in char_sa.iter().skip(1) {
+        byte_sa.push(chari[char_sufstart]);
     }
-    make_suffix_array(text, byte_sa)
+    byte_sa
 }
 
 fn sais_vec(chars: &[u32]) -> Vec<uint> {
+    println!("finding suffix types");
     let stypes = suffix_types(chars);
 
     // DEBUG.
@@ -102,6 +112,7 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     }
     // DEBUG.
 
+    println!("finding wstrings");
     let wstrs = find_wstrings(&*stypes, chars);
 
     // DEBUG.
@@ -112,6 +123,7 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     }
     // DEBUG.
 
+    println!("sorting {} wstrings", wstrs.len());
     let mut wstrs_sorted = wstrs.clone();
     wstrs_sorted.sort_by(|w1, w2| wstring_cmp(&*chars, &*stypes, w1, w2));
 
@@ -125,15 +137,24 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
 
     // Derive lexical names for each wstring. Each wstring gets its own
     // unique name.
+    println!("building reduced string");
+    let mut duplicate_names = false; // if stays false, we have our base case
     let mut cur_name = 0;
     let mut last_wstr = wstrs[0];
-    let mut reduced: Vec<u32> = repeat(0).take(wstrs.len()).collect();
+    let mut reduced: Vec<u32> = repeat(0).take(wstrs.len() + 1).collect();
     reduced[last_wstr.sequence] = cur_name;
+    reduced[wstrs.len()] = SENTINEL;
     for &wstr in wstrs_sorted.iter().skip(1) {
         // let order = wstring_cmp(&*chars, &*stypes, &last_wstr, &wstr);
         // debug!("cmp({}, {}) == {}", last_wstr, wstr, order);
-        if wstring_cmp(&*chars, &*stypes, &last_wstr, &wstr) != Equal {
+        if wstring_cmp(&*chars, &*stypes, &last_wstr, &wstr) == Equal {
+            duplicate_names = true;
+        } else {
             cur_name += 1;
+            // never allow a name to be our sentinel
+            if cur_name == SENTINEL {
+                cur_name += 1;
+            }
         }
         reduced[wstr.sequence] = cur_name;
         last_wstr = wstr;
@@ -143,12 +164,11 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     debug!("reduced string: {}", reduced);
     // DEBUG.
 
-    if (cur_name as uint) < wstrs.len() - 1 {
-        // This should be a recursive call, but we're doing it the slow way
-        // for now. ---AG
-        let mut sa: Vec<uint> = range(0, reduced.len()).collect();
-        sa.sort_by(|&a, &b| reduced[a..].cmp(reduced[b..]));
-        for (rank, &sufstart) in sa.iter().enumerate() {
+    if duplicate_names {
+        println!("size of recursive case: {}, names: {}", reduced.len(), cur_name);
+        let sa: Vec<uint> = sais_vec(&*reduced);
+        // Drop the first suffix because it is always the sentinel.
+        for (rank, &sufstart) in sa.iter().skip(1).enumerate() {
             wstrs_sorted[rank] = wstrs[sufstart];
         }
 
@@ -172,7 +192,7 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     // But, we still have sentinels, which tweak the ordering of characters.
     // If we get rid of sentinels, a BTreeMap is trivial to use.
     // Otherwise, we need to newtype a character and define an ordering on it.
-    let mut sa: Vec<uint> = repeat(INVALID).take(chars.len()).collect();
+    let mut sa: Vec<int> = repeat(-1).take(chars.len()).collect();
     let mut bin_sizes: HashMap<u32, uint> = HashMap::new();
     for &c in chars.iter() {
         match bin_sizes.entry(c) {
@@ -200,7 +220,7 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     // Insert the valley suffixes.
     for wstr in wstrs_sorted.iter().rev() {
         let binp = &mut bin_ptrs[chars[wstr.start]];
-        sa[*binp] = wstr.start;
+        sa[*binp] = wstr.start as int;
         if *binp > 0 { *binp -= 1; }
     }
     debug!("after step 0: {}", sa);
@@ -215,11 +235,8 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     // Insert the descending suffixes.
     for i in range(0, sa.len()) {
         let sufi = sa[i];
-        if sufi == INVALID || sufi == 0 {
-            continue
-        }
-        if stypes[sufi - 1].is_desc() {
-            let binp = &mut bin_ptrs[chars[sufi - 1]];
+        if sufi > 0 && stypes[(sufi - 1) as uint].is_desc() {
+            let binp = &mut bin_ptrs[chars[(sufi - 1) as uint]];
             sa[*binp] = sufi - 1;
             *binp += 1;
         }
@@ -236,17 +253,14 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     // Insert the ascending suffixes.
     for i in range(0, sa.len()).rev() {
         let sufi = sa[i];
-        if sufi == INVALID || sufi == 0 {
-            continue
-        }
-        if stypes[sufi - 1].is_asc() {
-            let binp = &mut bin_ptrs[chars[sufi - 1]];
+        if sufi > 0 && stypes[(sufi - 1) as uint].is_asc() {
+            let binp = &mut bin_ptrs[chars[(sufi - 1) as uint]];
             sa[*binp] = sufi - 1;
             *binp -= 1;
         }
     }
     debug!("after step 2: {}", sa);
-    sa
+    unsafe { ::std::mem::transmute(sa) }
 }
 
 #[derive(Clone, Copy, Eq, Ord, Show)]
@@ -427,8 +441,11 @@ fn chrcmp(c1: &u32, c2: &u32) -> Ordering {
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
+
+    use self::test::Bencher;
     use quickcheck::{TestResult, quickcheck};
-    use super::{naive, sais};
+    use super::{naive, naive_table, sais, sais_table};
 
     #[test]
     fn basic() {
@@ -494,5 +511,41 @@ mod tests {
         debug!("{}", sa);
 
         assert_eq!(sa, naive("tgtgtgtgcaccg"));
+    }
+
+    #[bench]
+    fn naive_small(b: &mut Bencher) {
+        let s = "mississippi";
+        b.iter(|| { naive_table(s); })
+    }
+
+    #[bench]
+    fn sais_small(b: &mut Bencher) {
+        let s = "mississippi";
+        b.iter(|| { sais_table(s); })
+    }
+
+    #[bench]
+    fn naive_dna_small(b: &mut Bencher) {
+        let s = include_str!("AP009048_10000.fasta");
+        b.iter(|| { naive_table(s); })
+    }
+
+    #[bench]
+    fn sais_dna_small(b: &mut Bencher) {
+        let s = include_str!("AP009048_10000.fasta");
+        b.iter(|| { sais_table(s); })
+    }
+
+    #[bench]
+    fn naive_dna_medium(b: &mut Bencher) {
+        let s = include_str!("AP009048_100000.fasta");
+        b.iter(|| { naive_table(s); })
+    }
+
+    #[bench]
+    fn sais_dna_medium(b: &mut Bencher) {
+        let s = include_str!("AP009048_100000.fasta");
+        b.iter(|| { sais_table(s); })
     }
 }
