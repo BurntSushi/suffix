@@ -166,7 +166,10 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
 
     if duplicate_names {
         println!("size of recursive case: {}, names: {}", reduced.len(), cur_name);
-        let sa: Vec<uint> = sais_vec(&*reduced);
+        let sa = sais_vec(&*reduced);
+        // let mut sa: Vec<uint> = range(0, reduced.len()).collect();
+        // sa.sort_by(|&a, &b| reduced[a..].cmp(reduced[b..]));
+        // debug!("SA: {}", sa);
         // Drop the first suffix because it is always the sentinel.
         for (rank, &sufstart) in sa.iter().skip(1).enumerate() {
             wstrs_sorted[rank] = wstrs[sufstart];
@@ -195,8 +198,8 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     let mut sa: Vec<int> = repeat(-1).take(chars.len()).collect();
     let mut bin_sizes: HashMap<u32, uint> = HashMap::new();
     for &c in chars.iter() {
-        match bin_sizes.entry(c) {
-            Entry::Vacant(v) => { v.set(1); }
+        match bin_sizes.entry(&c) {
+            Entry::Vacant(v) => { v.insert(1); }
             Entry::Occupied(mut v) => { *v.get_mut() += 1; }
         }
     }
@@ -263,7 +266,7 @@ fn sais_vec(chars: &[u32]) -> Vec<uint> {
     unsafe { ::std::mem::transmute(sa) }
 }
 
-#[derive(Clone, Copy, Eq, Ord, Show)]
+#[derive(Clone, Copy, Eq, Show)]
 enum SuffixType {
     Ascending,
     Descending,
@@ -296,7 +299,8 @@ impl SuffixType {
 
 impl PartialEq for SuffixType {
     fn eq(&self, other: &SuffixType) -> bool {
-        self.is_asc() && other.is_asc()
+        (self.is_asc() && other.is_asc())
+        || (self.is_desc() && other.is_desc())
     }
 }
 
@@ -310,6 +314,12 @@ impl PartialOrd for SuffixType {
             assert!(self == other);
             Equal
         })
+    }
+}
+
+impl Ord for SuffixType {
+    fn cmp(&self, other: &SuffixType) -> Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 
@@ -507,10 +517,11 @@ mod tests {
 
     #[test]
     fn array_scratch() {
-        let sa = sais("tgtgtgtgcaccg");
+        // let sa = sais("tgtgtgtgcaccg");
+        let sa = sais("32P32Pz");
         debug!("{}", sa);
 
-        assert_eq!(sa, naive("tgtgtgtgcaccg"));
+        assert_eq!(sa, naive("32P32Pz"));
     }
 
     #[bench]
