@@ -23,6 +23,7 @@ bench = false
 
 [dependencies]
 rustc-serialize = "*"
+log = "*"
 docopt = "*"
 
 [dev-dependencies]

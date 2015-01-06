@@ -517,11 +517,11 @@ mod tests {
 
     #[test]
     fn array_scratch() {
-        // let sa = sais("tgtgtgtgcaccg");
-        let sa = sais("32P32Pz");
+        let sa = sais("tgtgtgtgcaccg");
+        // let sa = sais("32P32Pz");
         debug!("{}", sa);
 
-        assert_eq!(sa, naive("32P32Pz"));
+        // assert_eq!(sa, naive("32P32Pz"));
     }
 
     #[bench]
