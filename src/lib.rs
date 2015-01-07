@@ -2,12 +2,12 @@
 
 #![crate_name = "suffix"]
 #![doc(html_root_url = "http://burntsushi.net/rustdoc/suffix")]
-#![feature(associated_types, macro_rules, phase, slicing_syntax)]
+#![feature(slicing_syntax)]
 #![experimental]
 
 #![allow(dead_code, unused_imports, unused_variables)]
 
-#[phase(plugin, link)] extern crate log;
+#[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
 
 use std::collections::btree_map::{self, BTreeMap};
