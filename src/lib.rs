@@ -349,4 +349,5 @@ impl<'t> Iterator for SuffixIndices<'t> {
 }
 
 mod array;
+mod array2;
 mod to_suffix_tree;
