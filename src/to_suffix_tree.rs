@@ -86,7 +86,7 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
     st
 }
 
-fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: uint) -> &'a mut Node {
+fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: usize) -> &'a mut Node {
     // Is it worth making a mutable `Ancestors` iterator?
     // If this is the only place that needs it, probably not. ---AG
     let mut cur = start;
@@ -160,7 +160,7 @@ mod tests {
             let sa = array_naive(&*s);
             let st = sa.to_suffix_tree();
             for (i, sufi) in st.root.suffix_indices().enumerate() {
-                if st.text[sufi..] != sa.suffix(i) {
+                if &st.text[sufi..] != sa.suffix(i) {
                     return false;
                 }
             }
@@ -172,7 +172,7 @@ mod tests {
     fn scratch() {
         let sa = array_naive("mississippi");
         let st = sa.to_suffix_tree();
-        debug!("{}", st);
+        debug!("{:?}", st);
         // let node = st.root.children.get(&'a').unwrap()
                           // .children.get(&'n').unwrap()
                           // .children.get(&'n').unwrap();

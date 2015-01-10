@@ -1,3 +1,5 @@
+#![allow(unstable)]
+
 extern crate "rustc-serialize" as rustc_serialize;
 extern crate docopt;
 extern crate suffix;

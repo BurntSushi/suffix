@@ -2,10 +2,10 @@
 
 #![crate_name = "suffix"]
 #![doc(html_root_url = "http://burntsushi.net/rustdoc/suffix")]
-#![feature(slicing_syntax)]
 #![experimental]
 
 #![allow(dead_code, unused_imports, unused_variables)]
+#![allow(unstable)]
 
 #[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
@@ -23,9 +23,9 @@ pub use array::{naive_table, sais_table};
 #[derive(Eq, PartialEq)]
 pub struct SuffixArray<'s> {
     text: &'s str,
-    table: Vec<uint>,
-    inverse: Vec<uint>,
-    lcp_lens: Vec<uint>,
+    table: Vec<usize>,
+    inverse: Vec<usize>,
+    lcp_lens: Vec<usize>,
 }
 
 impl<'s> SuffixArray<'s> {
@@ -33,12 +33,12 @@ impl<'s> SuffixArray<'s> {
         to_suffix_tree::to_suffix_tree(self)
     }
 
-    pub fn suffix(&self, i: uint) -> &str {
-        self.text.slice_from(self.table[i])
+    pub fn suffix(&self, i: usize) -> &str {
+        &self.text[self.table[i]..]
     }
 
-    pub fn lcp(&self, i: uint) -> &str {
-        self.text.slice(self.table[i], self.table[i] + self.lcp_lens[i])
+    pub fn lcp(&self, i: usize) -> &str {
+        &self.text[self.table[i]..self.table[i] + self.lcp_lens[i]]
     }
 }
 
@@ -70,10 +70,10 @@ pub struct SuffixTree<'s> {
 struct Node {
     parent: Rawlink<Node>,
     children: BTreeMap<char, Box<Node>>,
-    suffixes: Vec<uint>,
-    start: uint,
-    end: uint,
-    path_len: uint,
+    suffixes: Vec<usize>,
+    start: usize,
+    end: usize,
+    path_len: usize,
 }
 
 struct Rawlink<T> {
@@ -95,12 +95,12 @@ impl<'s> SuffixTree<'s> {
     }
 
     fn label(&self, node: &Node) -> &'s str {
-        self.text[node.start .. node.end]
+        &self.text[node.start .. node.end]
     }
 
     fn suffix(&self, node: &Node) -> &'s str {
         assert!(node.suffixes.len() > 0);
-        self.text.slice_from(node.suffixes[0])
+        &self.text[node.suffixes[0]..]
     }
 
     fn key(&self, node: &Node) -> char {
@@ -109,29 +109,29 @@ impl<'s> SuffixTree<'s> {
 }
 
 impl Node {
-    fn leaf(sufstart: uint, start: uint, end: uint) -> Box<Node> {
-        box Node {
+    fn leaf(sufstart: usize, start: usize, end: usize) -> Box<Node> {
+        Box::new(Node {
             parent: Rawlink::none(),
             children: BTreeMap::new(),
             suffixes: vec![sufstart],
             start: start,
             end: end,
             path_len: 0,
-        }
+        })
     }
 
-    fn internal(start: uint, end: uint) -> Box<Node> {
-        box Node {
+    fn internal(start: usize, end: usize) -> Box<Node> {
+        Box::new(Node {
             parent: Rawlink::none(),
             children: BTreeMap::new(),
             suffixes: vec![],
             start: start,
             end: end,
             path_len: 0,
-        }
+        })
     }
 
-    fn len(&self) -> uint {
+    fn len(&self) -> usize {
         self.end - self.start
     }
 
@@ -176,7 +176,7 @@ impl Node {
         self.path_len = node.path_len + self.len();
     }
 
-    fn depth(&self) -> uint {
+    fn depth(&self) -> usize {
         self.ancestors().count() - 1
     }
 }
@@ -212,7 +212,7 @@ impl<T> Rawlink<T> {
 impl<'s> fmt::Show for SuffixTree<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fn fmt<'s>(f: &mut fmt::Formatter, st: &SuffixTree<'s>,
-                   node: &Node, depth: uint) -> fmt::Result {
+                   node: &Node, depth: usize) -> fmt::Result {
             let indent: String = iter::repeat(' ').take(depth * 2).collect();
             if node.is_root() {
                 try!(writeln!(f, "ROOT"));
@@ -269,7 +269,7 @@ impl<'t> Iterator for Children<'t> {
         self.it.next().map(|n| &**n)
     }
 
-    fn size_hint(&self) -> (uint, Option<uint>) {
+    fn size_hint(&self) -> (usize, Option<usize>) {
         self.it.size_hint()
     }
 }
@@ -326,13 +326,13 @@ impl<'t> Iterator for Leaves<'t> {
 struct SuffixIndices<'t> {
     it: Leaves<'t>,
     node: Option<&'t Node>,
-    cur_suffix: uint,
+    cur_suffix: usize,
 }
 
 impl<'t> Iterator for SuffixIndices<'t> {
-    type Item = uint;
+    type Item = usize;
 
-    fn next(&mut self) -> Option<uint> {
+    fn next(&mut self) -> Option<usize> {
         if let Some(node) = self.node {
             if self.cur_suffix < node.suffixes.len() {
                 self.cur_suffix += 1;
