@@ -1,19 +1,16 @@
 use std::borrow::ToOwned;
 use std::cmp::Ordering::{self, Equal, Greater, Less};
 use std::collections::hash_map::{HashMap, Entry};
-use std::iter::{range, repeat};
+use std::iter::{self, range, repeat};
 use std::mem::transmute;
+use std::slice;
+use std::str;
 
 use SuffixArray;
 use self::SuffixType::{Ascending, Descending, Valley};
 
-// macro_rules! char_indices {
-    // ($text:expr) => {
-        // match $text {
-            // Unicode
-
 // const SENTINEL: char = unsafe { transmute(0x110000) };
-const SENTINEL: char = '\x00';
+const SENTINEL: u32 = 0;
 const INVALID: usize = 0x110001; // this is wrong
 
 pub fn naive<'s>(s: &'s str) -> SuffixArray<'s> {
@@ -87,20 +84,23 @@ fn lcp_len(a: &str, b: &str) -> usize {
 // }
 
 pub fn sais_table<'s>(mut text: String) -> Vec<usize> {
-    text.push(SENTINEL);
+    text.push('\x00');
     // let sufs = sais_vec(Text::from_str(text.as_slice()));
-    let sufs = sais_vec(&*text);
+    let sufs = sais_vec(&Unicode::from_str(&*text));
     // sufs.remove(0); // remove the sentinel
     sufs
 }
 
-fn sais_vec(text: &str) -> Vec<usize> {
+fn sais_vec<T>(text: &T) -> Vec<usize>
+        where T: Text,
+              <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
+              <<T as Text>::Chars as Iterator>::Item: Char {
     println!("finding suffix types");
     let stypes = suffix_types(text);
 
     // DEBUG.
     debug!("\nsuffix types");
-    for (c, t) in text.chars().zip(stypes.iter()) {
+    for (c, t) in text.chars().map(|v| v.char()).zip(stypes.iter()) {
         debug!("{}: {:?}", c, t);
     }
     // DEBUG.
@@ -112,7 +112,7 @@ fn sais_vec(text: &str) -> Vec<usize> {
     debug!("\nwstrings");
     for (i, wstr) in wstrs.iter().enumerate() {
         debug!("wstr {} [{}, {}): {}",
-               i, wstr.start, wstr.end, wstr.slice(text));
+               i, wstr.start, wstr.end, wstr._string(text));
     }
     // DEBUG.
 
@@ -124,7 +124,7 @@ fn sais_vec(text: &str) -> Vec<usize> {
     debug!("\nsorted wstrings");
     for (i, wstr) in wstrs_sorted.iter().enumerate() {
         debug!("wstr {} [{}, {}): {}",
-               i, wstr.start, wstr.end, wstr.slice(text));
+               i, wstr.start, wstr.end, wstr._string(text));
     }
     // DEBUG.
 
@@ -353,10 +353,11 @@ impl Ord for SuffixType {
     }
 }
 
-fn suffix_types(text: &str) -> Vec<SuffixType> {
+fn suffix_types<T>(text: &T) -> Vec<SuffixType>
+        where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
     let mut stypes = Vec::with_capacity(text.len());
     let (mut last, mut lastc) = (Valley, SENTINEL);
-    for c in text.chars().rev() {
+    for (i, c) in text.char_indices().rev().map(|v| v.idx_char()) {
         if c == SENTINEL {
             stypes.push(Valley);
             lastc = c;
@@ -397,26 +398,28 @@ impl WString {
         &xs[i]
     }
 
-    fn char_at<'s>(&self, xs: &'s str, i: usize) -> char {
+    fn char_at<T: Text>(&self, text: &T, i: usize) -> u32 {
         assert!(self.start + i < self.end);
-        xs.char_at(self.start + i)
-    }
-
-    fn slice<'s>(&self, s: &'s str) -> &'s str {
-        &s[self.start .. self.end]
+        text.char_at(self.start + i)
     }
 
     fn len(&self) -> usize {
         self.end - self.start
     }
+
+    // For debugging only.
+    fn _string<T: Text>(&self, text: &T) -> String {
+        text._string(self.start, self.end)
+    }
 }
 
-fn find_wstrings(stypes: &[SuffixType], text: &str) -> Vec<WString> {
+fn find_wstrings<T>(stypes: &[SuffixType], text: &T) -> Vec<WString>
+        where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
     let mut wstrs: Vec<WString> = Vec::with_capacity(text.len() / 4);
     let mut sequence = 0;
     let mut cur = WString::start_at(sequence, 0);
 
-    for ((bytei, c), t) in text.char_indices().zip(stypes.iter()) {
+    for ((bytei, c), t) in text.char_indices().map(|v| v.idx_char()).zip(stypes.iter()) {
         if t.is_valley() {
             if cur.start == 0 {
                 cur.start = bytei;
@@ -437,8 +440,8 @@ fn find_wstrings(stypes: &[SuffixType], text: &str) -> Vec<WString> {
     wstrs
 }
 
-fn wstring_cmp(
-    text: &str,
+fn wstring_cmp<T: Text>(
+    text: &T,
     stypes: &[SuffixType],
     w1: &WString,
     w2: &WString,
@@ -496,46 +499,156 @@ fn chrcmp(c1: &u32, c2: &u32) -> Ordering {
     // }
 }
 
-enum Text<'s> {
-    Unicode(&'s str, usize),
-    LexNames(Vec<u32>),
+trait Text {
+    type Chars: Iterator + DoubleEndedIterator;
+    type IdxChars: Iterator + DoubleEndedIterator;
+    fn len(&self) -> usize;
+    fn char_at(&self, i: usize) -> u32;
+    fn chars(&self) -> Self::Chars;
+    fn char_indices(&self) -> Self::IdxChars;
+
+    // For debugging. (This is why we aren't implementing slice syntax.)
+    fn _string_from(&self, start: usize) -> String;
+    fn _string(&self, start: usize, end: usize) -> String;
 }
 
-impl<'s> Text<'s> {
-    fn from_str(s: &'s str) -> Text<'s> {
-        Text::from_str_len(s, s.chars().count())
+struct Unicode<'s> {
+    s: &'s str,
+    len: usize,
+}
+
+impl<'s> Unicode<'s> {
+    fn from_str(s: &'s str) -> Unicode<'s> {
+        Unicode::from_str_len(s, s.chars().count())
     }
 
-    fn from_str_len(s: &'s str, len: usize) -> Text<'s> {
-        Text::Unicode(s, len)
-    }
-
-    fn from_names(names: Vec<u32>) -> Text<'static> {
-        Text::LexNames(names)
-    }
-
-    fn len(&self) -> usize {
-        match *self {
-            Text::Unicode(_, len) => len,
-            Text::LexNames(ref names) => names.len(),
-        }
-    }
-
-    fn char_at(&self, i: usize) -> u32 {
-        match *self {
-            Text::Unicode(s, _) => s.char_at(i) as u32,
-            Text::LexNames(ref s) => s[i],
-        }
-    }
-
-    // Should be for debugging only!
-    fn string_from(&self, i: usize) -> String {
-        match *self {
-            Text::Unicode(s, _) => s[i..].to_owned(),
-            Text::LexNames(ref s) => format!("{:?}", s),
-        }
+    fn from_str_len(s: &'s str, len: usize) -> Unicode<'s> {
+        Unicode { s: s, len: len }
     }
 }
+
+impl<'s> Text for Unicode<'s> {
+    type Chars = str::Chars<'s>;
+    type IdxChars = str::CharIndices<'s>;
+
+    fn len(&self) -> usize { self.len }
+
+    fn char_at(&self, i: usize) -> u32 { self.s.char_at(i) as u32 }
+
+    fn chars(&self) -> str::Chars<'s> {
+        self.s.chars()
+    }
+
+    fn char_indices(&self) -> str::CharIndices<'s> {
+        self.s.char_indices()
+    }
+
+    fn _string_from(&self, start: usize) -> String {
+        self.s[start..].to_owned()
+    }
+
+    fn _string(&self, start: usize, end: usize) -> String {
+        self.s[start..end].to_owned()
+    }
+}
+
+struct LexNames<'s> {
+    s: &'s [u32],
+}
+
+impl<'s> Text for LexNames<'s> {
+    type Chars = slice::Iter<'s, u32>;
+    type IdxChars = iter::Enumerate<slice::Iter<'s, u32>>;
+
+    fn len(&self) -> usize { self.s.len() }
+
+    fn char_at(&self, i: usize) -> u32 { self.s[i] }
+
+    fn chars(&self) -> slice::Iter<'s, u32> {
+        self.s.iter()
+    }
+
+    fn char_indices(&self) -> iter::Enumerate<slice::Iter<'s, u32>> {
+        self.s.iter().enumerate()
+    }
+
+    fn _string_from(&self, start: usize) -> String {
+        format!("{:?}", &self.s[start..])
+    }
+
+    fn _string(&self, start: usize, end: usize) -> String {
+        format!("{:?}", &self.s[start..end])
+    }
+}
+
+trait IdxChar {
+    fn idx_char(self) -> (usize, u32);
+}
+
+impl<'a> IdxChar for (usize, &'a u32) {
+    #[inline]
+    fn idx_char(self) -> (usize, u32) { (self.0, *self.1) }
+}
+
+impl IdxChar for (usize, char) {
+    #[inline]
+    fn idx_char(self) -> (usize, u32) { (self.0, self.1 as u32) }
+}
+
+trait Char {
+    fn char(self) -> u32;
+}
+
+impl<'a> Char for &'a u32 {
+    #[inline]
+    fn char(self) -> u32 { *self }
+}
+
+impl Char for char {
+    #[inline]
+    fn char(self) -> u32 { self as u32 }
+}
+
+// enum Text<'s> {
+    // Unicode(&'s str, usize),
+    // LexNames(Vec<u32>),
+// }
+//
+// impl<'s> Text<'s> {
+    // fn from_str(s: &'s str) -> Text<'s> {
+        // Text::from_str_len(s, s.chars().count())
+    // }
+//
+    // fn from_str_len(s: &'s str, len: usize) -> Text<'s> {
+        // Text::Unicode(s, len)
+    // }
+//
+    // fn from_names(names: Vec<u32>) -> Text<'static> {
+        // Text::LexNames(names)
+    // }
+//
+    // fn len(&self) -> usize {
+        // match *self {
+            // Text::Unicode(_, len) => len,
+            // Text::LexNames(ref names) => names.len(),
+        // }
+    // }
+//
+    // fn char_at(&self, i: usize) -> u32 {
+        // match *self {
+            // Text::Unicode(s, _) => s.char_at(i) as u32,
+            // Text::LexNames(ref s) => s[i],
+        // }
+    // }
+//
+    // // Should be for debugging only!
+    // fn string_from(&self, i: usize) -> String {
+        // match *self {
+            // Text::Unicode(s, _) => s[i..].to_owned(),
+            // Text::LexNames(ref s) => format!("{:?}", s),
+        // }
+    // }
+// }
 
 #[cfg(test)]
 mod tests {
