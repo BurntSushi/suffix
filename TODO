@@ -1,0 +1,36 @@
+There are three major components left to implement in `sais` before it can be
+realistically called "done."
+
+These are emphatically in no particular order. In fact, I do not know in which
+order I should tackle them.
+
+1. Figue out the story with sentinels. Do we really need them in the string?
+   It seems trivial enough to remove them and just special case an the index
+   equal to the length of the string. But...
+
+2. Implement generalized suffix arrays. The trick with these is that you can't
+   incorporate suffixes that cross word boundaries. It seems like it should
+   be possible to do this without sentinels, but sentinels may make the code
+   much simpler.
+   Generalized suffix arrays also require a lot more memory.
+   But generalized suffix arrays are *really* useful.
+
+3. Reduce allocation. We really need to focus on not creating `Vec`s of size
+   equal to the number of input characters. We're doing a lot of that now.
+   Similarly, we should try to figure out how to *not* have `wstrs` and
+   `wstrs_sorted` in memory at the same time. Maybe induced sorting will help
+   with this?
+   A paper describes a trick to keep memory requirements very low by reusing
+   the suffix array. I think we can probably ignore this optimization for now,
+   but we still need to reduce allocation.
+
+4. Profile. There are undoubtedly places where I've been careless and things
+   could be done faster. e.g., Every character iterator is running a
+   method like `v.char()` or `v.idx_char()`. Are these getting inlined?
+   I hope so.
+
+5. Do we pay a cost for the generic `Text` trait? I thought a lot about how
+   to do this without a `Text` trait, and I couldn't come up with anything
+   workable. We really need to write code that is generic over iterators of
+   characters...
+
