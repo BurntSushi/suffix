@@ -140,7 +140,7 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
     // println!("building reduced string");
     let mut duplicate_names = false; // if stays false, we have our base case
     let mut cur_name = 0;
-    let mut last_wstr = wstrs[0];
+    let mut last_wstr = wstrs_sorted[0];
     let mut reduced: Vec<u32> = repeat(0).take(wstrs.len() + 1).collect();
     reduced[last_wstr.sequence] = cur_name;
     reduced[wstrs.len()] = SENTINEL;
