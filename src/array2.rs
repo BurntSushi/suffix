@@ -1,7 +1,7 @@
 use std::borrow::ToOwned;
 use std::cmp::Ordering::{self, Equal, Greater, Less};
 use std::collections::hash_map::{HashMap, Entry};
-use std::iter::{self, range, repeat};
+use std::iter::{self, repeat};
 use std::mem::transmute;
 use std::slice;
 use std::str;
@@ -79,15 +79,15 @@ fn lcp_len(a: &str, b: &str) -> usize {
     a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count()
 }
 
-// pub fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
-    // make_suffix_array(text, sais_table(text))
-// }
+pub fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
+    make_suffix_array(text, sais_table(text.to_owned()))
+}
 
 pub fn sais_table<'s>(mut text: String) -> Vec<usize> {
     text.push('\x00');
     // let sufs = sais_vec(Text::from_str(text.as_slice()));
-    let sufs = sais_vec(&Unicode::from_str(&*text));
-    // sufs.remove(0); // remove the sentinel
+    let mut sufs = sais_vec(&Unicode::from_str(&*text));
+    sufs.remove(0); // remove the sentinel
     sufs
 }
 
@@ -101,7 +101,7 @@ fn sais_vec<T>(text: &T) -> Vec<usize>
     // DEBUG.
     debug!("\nsuffix types");
     for (c, t) in text.chars().map(|v| v.char()).zip(stypes.iter()) {
-        debug!("{}: {:?}", c, t);
+        debug!("{}: {:?}", chr(c), t);
     }
     // DEBUG.
 
@@ -123,12 +123,139 @@ fn sais_vec<T>(text: &T) -> Vec<usize>
     // DEBUG.
     debug!("\nsorted wstrings");
     for (i, wstr) in wstrs_sorted.iter().enumerate() {
+        debug!("wstr {} (seq: {}) [{}, {}): {}",
+               i, wstr.sequence, wstr.start, wstr.end, wstr._string(text));
+    }
+    // DEBUG.
+
+    // Derive lexical names for each wstring. Each wstring gets its own
+    // unique name.
+    println!("building reduced string");
+    let mut duplicate_names = false; // if stays false, we have our base case
+    let mut cur_name = 1;
+    let mut last_wstr = wstrs_sorted[0];
+    let mut reduced: Vec<u32> = repeat(0).take(wstrs.len() + 1).collect();
+    debug!("last sequence: {:?}", last_wstr.sequence);
+    debug!("wstrs.len: {:?}", wstrs.len());
+    reduced[last_wstr.sequence] = cur_name;
+    reduced[wstrs.len()] = SENTINEL;
+    for &wstr in wstrs_sorted.iter().skip(1) {
+        // let order = wstring_cmp(&*chars, &*stypes, &last_wstr, &wstr);
+        // debug!("cmp({}, {}) == {}", last_wstr, wstr, order);
+        if wstring_cmp(text, &*stypes, &last_wstr, &wstr) == Equal {
+            duplicate_names = true;
+        } else {
+            cur_name += 1;
+        }
+        debug!("setting sequence {:?} to {:?}", wstr.sequence, cur_name);
+        reduced[wstr.sequence] = cur_name;
+        last_wstr = wstr;
+    }
+
+    // DEBUG.
+    debug!("reduced string: {:?}", reduced);
+    // DEBUG.
+
+    if duplicate_names {
+        println!("size of recursive case: {}, names: {}", reduced.len(), cur_name);
+        // let sa = sais_vec(&LexNames(&*reduced));
+        let mut sa: Vec<usize> = range(0, reduced.len()).collect();
+        sa.sort_by(|&a, &b| reduced[a..].cmp(&reduced[b..]));
+        // debug!("SA: {}", sa);
+        // Drop the first suffix because it is always the sentinel.
+        for (rank, &sufstart) in sa.iter().skip(1).enumerate() {
+            wstrs_sorted[rank] = wstrs[sufstart];
+        }
+
+        // DEBUG.
+        debug!("\nreduced suffixes");
+        for (i, &sufstart) in sa.iter().enumerate() {
+            debug!("{}: [{}..]: {:?}", i, sufstart, &reduced[sufstart..]);
+        }
+        // DEBUG.
+    }
+
+    // DEBUG.
+    debug!("\nsorted wstrings");
+    for (i, wstr) in wstrs_sorted.iter().enumerate() {
         debug!("wstr {} [{}, {}): {}",
                i, wstr.start, wstr.end, wstr._string(text));
     }
     // DEBUG.
 
-    vec![]
+    // TODO: This nonsense could probably be replaced with a BTreeMap.
+    // But, we still have sentinels, which tweak the ordering of characters.
+    // If we get rid of sentinels, a BTreeMap is trivial to use.
+    // Otherwise, we need to newtype a character and define an ordering on it.
+    let mut sa: Vec<isize> = repeat(-1).take(text.len()).collect();
+    let mut bin_sizes: HashMap<u32, usize> = HashMap::new();
+    for c in text.chars().map(|c| c.char()) {
+        match bin_sizes.entry(c) {
+            Entry::Vacant(v) => { v.insert(1); }
+            Entry::Occupied(mut v) => { *v.get_mut() += 1; }
+        }
+    }
+
+    // Find the alphas in sorted order. These correspond to the labels of
+    // each bin.
+    let mut alphas: Vec<u32> = bin_sizes.keys().map(|&c| c).collect();
+    alphas.sort_by(chrcmp);
+
+    // These are pointers to the start/end of each bin. They are regenerated
+    // at each step.
+    let mut bin_ptrs: HashMap<u32, usize> = HashMap::new();
+
+    // Find the index of the last element of each bin in `sa`.
+    let mut sum = 0us;
+    for &c in alphas.iter() {
+        sum += bin_sizes[c];
+        bin_ptrs.insert(c, sum - 1);
+    }
+
+    // Insert the valley suffixes.
+    for wstr in wstrs_sorted.iter().rev() {
+        let binp = &mut bin_ptrs[text.char_at(wstr.start)];
+        sa[*binp] = wstr.start as isize;
+        if *binp > 0 { *binp -= 1; }
+    }
+    debug!("after step 0: {:?}", sa);
+
+    // Now find the start of each bin.
+    let mut sum = 0us;
+    for &c in alphas.iter() {
+        bin_ptrs.insert(c, sum);
+        sum += bin_sizes[c];
+    }
+
+    // Insert the descending suffixes.
+    for i in range(0, sa.len()) {
+        let sufi = sa[i];
+        if sufi > 0 && stypes[(sufi - 1) as usize].is_desc() {
+            let binp = &mut bin_ptrs[text.char_at((sufi - 1) as usize)];
+            sa[*binp] = sufi - 1;
+            *binp += 1;
+        }
+    }
+    debug!("after step 1: {:?}", sa);
+
+    // ... and find the end of each bin again.
+    let mut sum = 0us;
+    for &c in alphas.iter() {
+        sum += bin_sizes[c];
+        bin_ptrs.insert(c, sum - 1);
+    }
+
+    // Insert the ascending suffixes.
+    for i in range(0, sa.len()).rev() {
+        let sufi = sa[i];
+        if sufi > 0 && stypes[(sufi - 1) as usize].is_asc() {
+            let binp = &mut bin_ptrs[text.char_at((sufi - 1) as usize)];
+            sa[*binp] = sufi - 1;
+            *binp -= 1;
+        }
+    }
+    debug!("after step 2: {:?}", sa);
+    unsafe { ::std::mem::transmute(sa) }
 }
 
 // fn sais_vec(text: &str) -> Vec<usize> {
@@ -395,7 +522,7 @@ impl WString {
 
     fn index<'s, T>(&self, xs: &'s [T], i: usize) -> &'s T {
         assert!(self.start + i < self.end);
-        &xs[i]
+        &xs[self.start + i]
     }
 
     fn char_at<T: Text>(&self, text: &T, i: usize) -> u32 {
@@ -446,7 +573,7 @@ fn wstring_cmp<T: Text>(
     w1: &WString,
     w2: &WString,
 ) -> Ordering {
-    for i in range(0, w1.len()) {
+    for i in 0..w1.len() {
         // If we've run out of characters in w2, then w2 is a proper prefix
         // of w1 (since we still have more characters in w1 to examine).
         // Therefore, w1 > w2.
@@ -477,26 +604,16 @@ fn chrs(ns: &[u32]) -> String {
 }
 
 fn chr(n: u32) -> char {
-    unreachable!()
-    // if n == SENTINEL {
-        // '$'
-    // } else if n == INVALID as u32 { // wrong
-        // '?'
-    // } else {
-        // ::std::char::from_u32(n).unwrap()
-    // }
+    if n == SENTINEL {
+        '$'
+    } else {
+        ::std::char::from_u32(n).unwrap()
+    }
 }
 
 #[inline]
 fn chrcmp(c1: &u32, c2: &u32) -> Ordering {
-    unreachable!()
-    // if *c1 == SENTINEL && *c2 != SENTINEL {
-        // Less
-    // } else if *c1 != SENTINEL && *c2 == SENTINEL {
-        // Greater
-    // } else {
-        // c1.cmp(c2)
-    // }
+    c1.cmp(c2)
 }
 
 trait Text {
@@ -552,32 +669,30 @@ impl<'s> Text for Unicode<'s> {
     }
 }
 
-struct LexNames<'s> {
-    s: &'s [u32],
-}
+struct LexNames<'s>(&'s [u32]);
 
 impl<'s> Text for LexNames<'s> {
     type Chars = slice::Iter<'s, u32>;
     type IdxChars = iter::Enumerate<slice::Iter<'s, u32>>;
 
-    fn len(&self) -> usize { self.s.len() }
+    fn len(&self) -> usize { self.0.len() }
 
-    fn char_at(&self, i: usize) -> u32 { self.s[i] }
+    fn char_at(&self, i: usize) -> u32 { self.0[i] }
 
     fn chars(&self) -> slice::Iter<'s, u32> {
-        self.s.iter()
+        self.0.iter()
     }
 
     fn char_indices(&self) -> iter::Enumerate<slice::Iter<'s, u32>> {
-        self.s.iter().enumerate()
+        self.0.iter().enumerate()
     }
 
     fn _string_from(&self, start: usize) -> String {
-        format!("{:?}", &self.s[start..])
+        format!("{:?}", &self.0[start..])
     }
 
     fn _string(&self, start: usize, end: usize) -> String {
-        format!("{:?}", &self.s[start..end])
+        format!("{:?}", &self.0[start..end])
     }
 }
 
@@ -656,7 +771,7 @@ mod tests {
 
     use self::test::Bencher;
     use quickcheck::{TestResult, quickcheck};
-    use super::{naive, naive_table, sais_table};
+    use super::{naive, naive_table, sais_table, sais};
 
     // #[test]
     // fn sais_basic1() {
@@ -672,15 +787,15 @@ mod tests {
     // fn sais_basic3() {
         // assert_eq!(naive("mississippi"), sais("mississippi"));
     // }
-//
-    // #[test]
-    // fn qc_naive_equals_sais() {
-        // fn prop(s: String) -> TestResult {
-            // if s.is_empty() { return TestResult::discard(); }
-            // TestResult::from_bool(naive(&*s) == sais(&*s))
-        // }
-        // quickcheck(prop as fn(String) -> TestResult);
-    // }
+
+    #[test]
+    fn qc_naive_equals_sais() {
+        fn prop(s: String) -> TestResult {
+            if s.is_empty() { return TestResult::discard(); }
+            TestResult::from_bool(naive(&*s) == sais(&*s))
+        }
+        quickcheck(prop as fn(String) -> TestResult);
+    }
 
     #[test]
     fn array_scratch() {
