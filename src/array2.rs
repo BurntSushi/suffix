@@ -1,6 +1,6 @@
 use std::borrow::ToOwned;
 use std::cmp::Ordering::{self, Equal, Greater, Less};
-use std::collections::hash_map::{HashMap, Entry};
+use std::collections::btree_map::{BTreeMap, Entry};
 use std::iter::{self, repeat};
 use std::mem::transmute;
 use std::slice;
@@ -181,7 +181,7 @@ fn sais_vec<T>(text: &T) -> Vec<usize>
     // If we get rid of sentinels, a BTreeMap is trivial to use.
     // Otherwise, we need to newtype a character and define an ordering on it.
     let mut sa: Vec<isize> = repeat(-1).take(text.len()).collect();
-    let mut bin_sizes: HashMap<u32, usize> = HashMap::new();
+    let mut bin_sizes: BTreeMap<u32, usize> = BTreeMap::new();
     for c in text.chars().map(|c| c.char()) {
         match bin_sizes.entry(c) {
             Entry::Vacant(v) => { v.insert(1); }
@@ -189,18 +189,13 @@ fn sais_vec<T>(text: &T) -> Vec<usize>
         }
     }
 
-    // Find the alphas in sorted order. These correspond to the labels of
-    // each bin.
-    let mut alphas: Vec<u32> = bin_sizes.keys().map(|&c| c).collect();
-    alphas.sort_by(chrcmp);
-
     // These are pointers to the start/end of each bin. They are regenerated
     // at each step.
-    let mut bin_ptrs: HashMap<u32, usize> = HashMap::new();
+    let mut bin_ptrs: BTreeMap<u32, usize> = BTreeMap::new();
 
     // Find the index of the last element of each bin in `sa`.
     let mut sum = 0us;
-    for &c in alphas.iter() {
+    for &c in bin_sizes.keys() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
     }
@@ -215,7 +210,7 @@ fn sais_vec<T>(text: &T) -> Vec<usize>
 
     // Now find the start of each bin.
     let mut sum = 0us;
-    for &c in alphas.iter() {
+    for &c in bin_sizes.keys() {
         bin_ptrs.insert(c, sum);
         sum += bin_sizes[c];
     }
@@ -238,7 +233,7 @@ fn sais_vec<T>(text: &T) -> Vec<usize>
 
     // ... and find the end of each bin again.
     let mut sum = 0us;
-    for &c in alphas.iter() {
+    for &c in bin_sizes.keys() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
     }
