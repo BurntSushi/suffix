@@ -8,6 +8,8 @@ order I should tackle them.
    It seems trivial enough to remove them and just special case an the index
    equal to the length of the string. But...
 
+   OK I think I got this. ^
+
 2. Implement generalized suffix arrays. The trick with these is that you can't
    incorporate suffixes that cross word boundaries. It seems like it should
    be possible to do this without sentinels, but sentinels may make the code
@@ -34,3 +36,5 @@ order I should tackle them.
    workable. We really need to write code that is generic over iterators of
    characters...
 
+6. Use induced sorting for wstrings. My instinct is that this will have
+   a nice performance boost.
