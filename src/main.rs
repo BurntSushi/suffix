@@ -6,12 +6,13 @@ extern crate suffix;
 
 use std::io::File;
 use docopt::Docopt;
-use suffix::{naive_table, sais_table};
+use suffix::{naive_table, sais_table, sais_table2};
 
 static USAGE: &'static str = "
 Usage:
     suffix naive <file>
     suffix sais <file>
+    suffix sais2 <file>
 ";
 
 #[derive(RustcDecodable)]
@@ -19,6 +20,7 @@ struct Args {
     arg_file: String,
     cmd_naive: bool,
     cmd_sais: bool,
+    cmd_sais2: bool,
 }
 
 fn main() {
@@ -31,6 +33,8 @@ fn main() {
         naive_table(data);
     } else if args.cmd_sais {
         sais_table(data);
+    } else if args.cmd_sais2 {
+        sais_table2(data);
     } else {
         unreachable!();
     }

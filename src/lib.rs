@@ -19,6 +19,7 @@ use std::ptr;
 
 pub use array::naive as array_naive;
 pub use array::{naive_table, sais_table};
+pub use array2::sais_table as sais_table2;
 
 #[derive(Eq, PartialEq)]
 pub struct SuffixArray<'s> {
