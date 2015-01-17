@@ -24,22 +24,28 @@ pub use array2::sais_table as sais_table2;
 #[derive(Eq, PartialEq)]
 pub struct SuffixArray<'s> {
     text: &'s str,
-    table: Vec<usize>,
-    inverse: Vec<usize>,
-    lcp_lens: Vec<usize>,
+    table: Vec<u32>,
+    inverse: Vec<u32>,
+    lcp_lens: Vec<u32>,
 }
 
 impl<'s> SuffixArray<'s> {
+    pub fn len(&self) -> u32 {
+        self.text.len() as u32
+    }
+
     pub fn to_suffix_tree(&'s self) -> SuffixTree<'s> {
         to_suffix_tree::to_suffix_tree(self)
     }
 
-    pub fn suffix(&self, i: usize) -> &str {
-        &self.text[self.table[i]..]
+    pub fn suffix(&self, i: u32) -> &str {
+        &self.text[self.table[i as usize] as usize..]
     }
 
-    pub fn lcp(&self, i: usize) -> &str {
-        &self.text[self.table[i]..self.table[i] + self.lcp_lens[i]]
+    pub fn lcp(&self, i: u32) -> &str {
+        let i = i as usize;
+        let sufi = self.table[i] as usize;
+        &self.text[sufi..sufi + (self.lcp_lens[i] as usize)]
     }
 }
 
@@ -50,11 +56,11 @@ impl<'s> fmt::Show for SuffixArray<'s> {
         try!(writeln!(f, "text: {}", self.text));
         for (rank, &sufstart) in self.table.iter().enumerate() {
             try!(writeln!(f, "suffix[{}] {}, {}",
-                          rank, sufstart, self.suffix(rank)));
+                          rank, sufstart, self.suffix(rank as u32)));
         }
         for (sufstart, &rank) in self.inverse.iter().enumerate() {
             try!(writeln!(f, "inverse[{}] {}, {}",
-                          sufstart, rank, self.suffix(rank)));
+                          sufstart, rank, self.suffix(rank as u32)));
         }
         for (i, &len) in self.lcp_lens.iter().enumerate() {
             try!(writeln!(f, "lcp_length[{}] {}", i, len));
@@ -71,10 +77,10 @@ pub struct SuffixTree<'s> {
 struct Node {
     parent: Rawlink<Node>,
     children: BTreeMap<char, Box<Node>>,
-    suffixes: Vec<usize>,
-    start: usize,
-    end: usize,
-    path_len: usize,
+    suffixes: Vec<u32>,
+    start: u32,
+    end: u32,
+    path_len: u32,
 }
 
 struct Rawlink<T> {
@@ -96,12 +102,12 @@ impl<'s> SuffixTree<'s> {
     }
 
     fn label(&self, node: &Node) -> &'s str {
-        &self.text[node.start .. node.end]
+        &self.text[node.start as usize .. node.end as usize]
     }
 
     fn suffix(&self, node: &Node) -> &'s str {
         assert!(node.suffixes.len() > 0);
-        &self.text[node.suffixes[0]..]
+        &self.text[node.suffixes[0] as usize..]
     }
 
     fn key(&self, node: &Node) -> char {
@@ -110,7 +116,7 @@ impl<'s> SuffixTree<'s> {
 }
 
 impl Node {
-    fn leaf(sufstart: usize, start: usize, end: usize) -> Box<Node> {
+    fn leaf(sufstart: u32, start: u32, end: u32) -> Box<Node> {
         Box::new(Node {
             parent: Rawlink::none(),
             children: BTreeMap::new(),
@@ -121,7 +127,7 @@ impl Node {
         })
     }
 
-    fn internal(start: usize, end: usize) -> Box<Node> {
+    fn internal(start: u32, end: u32) -> Box<Node> {
         Box::new(Node {
             parent: Rawlink::none(),
             children: BTreeMap::new(),
@@ -132,7 +138,7 @@ impl Node {
         })
     }
 
-    fn len(&self) -> usize {
+    fn len(&self) -> u32 {
         self.end - self.start
     }
 
@@ -238,7 +244,7 @@ impl fmt::Show for Node {
         write!(f, "Node {{ start: {}, end: {}, len(children): {}, \
                            terminals: {}, parent? {} }}",
                self.start, self.end, self.children.len(), self.suffixes.len(),
-               self.parent.resolve().map(|_| "yes").unwrap_or("no"))
+               self.parent().map(|_| "yes").unwrap_or("no"))
     }
 }
 
@@ -327,17 +333,17 @@ impl<'t> Iterator for Leaves<'t> {
 struct SuffixIndices<'t> {
     it: Leaves<'t>,
     node: Option<&'t Node>,
-    cur_suffix: usize,
+    cur_suffix: u32,
 }
 
 impl<'t> Iterator for SuffixIndices<'t> {
-    type Item = usize;
+    type Item = u32;
 
-    fn next(&mut self) -> Option<usize> {
+    fn next(&mut self) -> Option<u32> {
         if let Some(node) = self.node {
-            if self.cur_suffix < node.suffixes.len() {
+            if (self.cur_suffix as usize) < node.suffixes.len() {
                 self.cur_suffix += 1;
-                return Some(node.suffixes[self.cur_suffix - 1]);
+                return Some(node.suffixes[self.cur_suffix as usize - 1]);
             }
             self.node = None;
             self.cur_suffix = 0;

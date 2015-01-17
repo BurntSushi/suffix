@@ -14,7 +14,7 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             // entirety of `vins`, which in turn means we can simply
             // add it as a new leaf.
             let mut node = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.text.len());
+                sufstart, sufstart + lcp_len, sa.len());
             node.add_parent(vins);
 
             let first_char = st.key(&*node);
@@ -68,7 +68,7 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             // 4) Create new leaf node with the current suffix, but with
             // the lcp trimmed.
             let mut leaf = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.text.len());
+                sufstart, sufstart + lcp_len, sa.len());
             leaf.add_parent(&mut *int_node);
 
             // Update the last node we visited.
@@ -86,7 +86,7 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
     st
 }
 
-fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: usize) -> &'a mut Node {
+fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: u32) -> &'a mut Node {
     // Is it worth making a mutable `Ancestors` iterator?
     // If this is the only place that needs it, probably not. ---AG
     let mut cur = start;
@@ -160,7 +160,7 @@ mod tests {
             let sa = array_naive(&*s);
             let st = sa.to_suffix_tree();
             for (i, sufi) in st.root.suffix_indices().enumerate() {
-                if &st.text[sufi..] != sa.suffix(i) {
+                if &st.text[sufi as usize..] != sa.suffix(i as u32) {
                     return false;
                 }
             }

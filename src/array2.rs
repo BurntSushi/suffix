@@ -14,16 +14,16 @@ pub fn naive<'s>(s: &'s str) -> SuffixArray<'s> {
     make_suffix_array(s, naive_table(s))
 }
 
-pub fn naive_table<'s>(s: &'s str) -> Vec<usize> {
-    let mut table: Vec<_> = s.char_indices().map(|(i, _)| i).collect();
-    table.sort_by(|&a, &b| s[a..].cmp(&s[b..]));
+pub fn naive_table<'s>(s: &'s str) -> Vec<u32> {
+    let mut table: Vec<_> = s.char_indices().map(|(i, _)| i as u32).collect();
+    table.sort_by(|&a, &b| s[a as usize..].cmp(&s[b as usize..]));
     table
 }
 
-fn make_suffix_array<'s>(s: &'s str, table: Vec<usize>) -> SuffixArray<'s> {
-    let mut inverse: Vec<usize> = repeat(0).take(table.len()).collect();
+fn make_suffix_array<'s>(s: &'s str, table: Vec<u32>) -> SuffixArray<'s> {
+    let mut inverse: Vec<u32> = repeat(0).take(table.len()).collect();
     for (rank, &sufstart) in table.iter().enumerate() {
-        inverse[sufstart] = rank;
+        inverse[sufstart as usize] = rank as u32;
     }
     let lcp_lens = lcp_lens_linear(s, &*table, &*inverse);
     SuffixArray {
@@ -34,7 +34,7 @@ fn make_suffix_array<'s>(s: &'s str, table: Vec<usize>) -> SuffixArray<'s> {
     }
 }
 
-fn lcp_lens_linear(text: &str, table: &[usize], inv: &[usize]) -> Vec<usize> {
+fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
     // This is a linear time construction algorithm taken from the first
     // two slides of:
     // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
@@ -43,14 +43,15 @@ fn lcp_lens_linear(text: &str, table: &[usize], inv: &[usize]) -> Vec<usize> {
     // O(n) in space. The inverse suffix array gives us a special ordering
     // with which to compute the LCPs.
     let mut lcps: Vec<_> = repeat(0).take(table.len()).collect();
-    let mut len = 0;
+    let mut len = 0u32;
     for (sufi2, &rank) in inv.iter().enumerate() {
         if rank == 0 {
             continue
         }
-        let sufi1 = table[rank - 1];
-        len += lcp_len(&text[sufi1 + len..], &text[sufi2 + len..]);
-        lcps[rank] = len;
+        let sufi1 = table[(rank - 1) as usize];
+        len += lcp_len(&text[(sufi1 + len) as usize..],
+                       &text[(sufi2 as u32 + len) as usize..]);
+        lcps[rank as usize] = len;
         if len > 0 {
             len -= 1;
         }
@@ -58,7 +59,7 @@ fn lcp_lens_linear(text: &str, table: &[usize], inv: &[usize]) -> Vec<usize> {
     lcps
 }
 
-fn lcp_lens_quadratic(text: &str, table: &[usize]) -> Vec<usize> {
+fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
     // This is quadratic because there are N comparisons for each LCP.
     // But it is done in constant space.
 
@@ -66,21 +67,22 @@ fn lcp_lens_quadratic(text: &str, table: &[usize]) -> Vec<usize> {
     //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
     let mut lcps: Vec<_> = repeat(0).take(table.len()).collect();
     for (i, win) in table.windows(2).enumerate() {
-        lcps[i+1] = lcp_len(&text[win[0]..], &text[win[1]..]);
+        lcps[i+1] = lcp_len(&text[win[0] as usize..],
+                            &text[win[1] as usize..]);
     }
     lcps
 }
 
 /// Compute the length of the least common prefix between two strings.
-fn lcp_len(a: &str, b: &str) -> usize {
-    a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count()
+fn lcp_len(a: &str, b: &str) -> u32 {
+    a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count() as u32
 }
 
 pub fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
     make_suffix_array(text, sais_table(text))
 }
 
-pub fn sais_table<'s>(text: &'s str) -> Vec<usize> {
+pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     match text.len() {
         0 => return vec![],
         1 => return vec![0],
@@ -89,7 +91,7 @@ pub fn sais_table<'s>(text: &'s str) -> Vec<usize> {
 
     let chars = text.chars().count();
     println!("Allocating suffix array of size {:?}", chars);
-    let mut sa: Vec<usize> = repeat(0).take(chars).collect();
+    let mut sa: Vec<u32> = repeat(0).take(chars).collect();
 
     // text.push('\x00');
     // let sufs = sais_vec(Text::from_str(text.as_slice()));
@@ -97,7 +99,7 @@ pub fn sais_table<'s>(text: &'s str) -> Vec<usize> {
     sa
 }
 
-fn sais_vec<T>(sa: &mut [usize], text: &T)
+fn sais_vec<T>(sa: &mut [u32], text: &T)
         where T: Text,
               <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
               <<T as Text>::Chars as Iterator>::Item: Char {
@@ -121,7 +123,7 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
     // DEBUG.
 
     println!("Find the size of each bin");
-    let mut bin_sizes: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut bin_sizes: BTreeMap<u32, u32> = BTreeMap::new();
     for c in text.chars().map(|c| c.char()) {
         match bin_sizes.entry(c) {
             Entry::Vacant(v) => { v.insert(1); }
@@ -131,10 +133,10 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
 
     // These are pointers to the start/end of each bin. They are regenerated
     // at each step.
-    let mut bin_ptrs: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut bin_ptrs: BTreeMap<u32, u32> = BTreeMap::new();
 
     // Find the index of the last element of each bin in `sa`.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in bin_sizes.keys() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
@@ -144,14 +146,14 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
         if stypes[i].is_valley() {
             let binp = &mut bin_ptrs[c];
-            sa[*binp] = i;
+            sa[*binp as usize] = i as u32;
             if *binp > 0 { *binp -= 1; }
         }
     }
     debug!("{{wstr}} after step 0: {:?}", sa);
 
     // Now find the start of each bin.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in bin_sizes.keys() {
         bin_ptrs.insert(c, sum);
         sum += bin_sizes[c];
@@ -159,18 +161,18 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
 
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
-    if stypes[lasti].is_desc() {
+    if stypes[lasti as usize].is_desc() {
         let binp = &mut bin_ptrs[lastc];
-        sa[*binp] = lasti;
+        sa[*binp as usize] = lasti;
         *binp += 1;
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti].is_desc() {
+            if stypes[lasti as usize].is_desc() {
                 let binp = &mut bin_ptrs[lastc];
-                sa[*binp] = lasti;
+                sa[*binp as usize] = lasti;
                 *binp += 1;
             }
         }
@@ -179,7 +181,7 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
     debug!("{{wstr}} after step 1: {:?}", sa);
 
     // ... and find the end of each bin again.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in bin_sizes.keys() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
@@ -190,9 +192,9 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti].is_asc() {
+            if stypes[lasti as usize].is_asc() {
                 let binp = &mut bin_ptrs[lastc];
-                sa[*binp] = lasti;
+                sa[*binp as usize] = lasti;
                 *binp -= 1;
             }
         }
@@ -200,22 +202,22 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
 
     debug!("{{wstr}} after step 2: {:?}", sa);
 
-    let mut num_wstrs = 0us;
+    let mut num_wstrs = 0u32;
     for i in 0..sa.len() {
         let sufi = sa[i];
-        if stypes[sufi].is_valley() {
-            sa[num_wstrs] = sufi;
+        if stypes[sufi as usize].is_valley() {
+            sa[num_wstrs as usize] = sufi;
             num_wstrs += 1;
         }
     }
     if num_wstrs == 0 { num_wstrs = 1; }
 
-    let mut prev_sufi = 0us; // the first suffix can never be a valley
-    let mut name = 1us;
+    let mut prev_sufi = 0u32; // the first suffix can never be a valley
+    let mut name = 1u32;
     let mut duplicates = false;
-    for i in (num_wstrs..sa.len()) { sa[i] = 0; }
+    for i in (num_wstrs..(sa.len() as u32)) { sa[i as usize] = 0; }
     for i in (0..num_wstrs) {
-        let this_sufi = sa[i];
+        let this_sufi = sa[i as usize];
         let mut diff = false;
         let mut thisi = this_sufi;
         let mut previ = prev_sufi;
@@ -229,14 +231,14 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
             }
             let this_char = text.char_at(thisi);
             let prev_char = text.char_at(previ);
-            let this_ty = stypes[thisi];
-            let prev_ty = stypes[previ];
+            let this_ty = stypes[thisi as usize];
+            let prev_ty = stypes[previ as usize];
             if prev_sufi == 0 || this_char != prev_char || this_ty != prev_ty {
                 diff = true;
                 break;
             }
-            if thisi > this_sufi && (stypes[thisi].is_valley()
-                                     || stypes[previ].is_valley()) {
+            if thisi > this_sufi && (stypes[thisi as usize].is_valley()
+                                     || stypes[previ as usize].is_valley()) {
                 break;
             }
             thisi = text.next(thisi).0;
@@ -251,14 +253,14 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
         // This divide-by-2 trick only works because it's impossible to have
         // two wstrings start at adjacent locations (they must at least be
         // separated by a single descending character).
-        sa[num_wstrs + (this_sufi / 2)] = name - 1;
+        sa[(num_wstrs + (this_sufi / 2)) as usize] = name - 1;
     }
 
-    let mut reduced: Vec<u32> = repeat(0).take(num_wstrs).collect();
-    let mut ri = 0us;
-    for i in (num_wstrs..sa.len()) {
-        if sa[i] > 0 {
-            reduced[ri] = (sa[i] - 1) as u32;
+    let mut reduced: Vec<u32> = repeat(0).take(num_wstrs as usize).collect();
+    let mut ri = 0u32;
+    for i in (num_wstrs..(sa.len() as u32)) {
+        if sa[i as usize] > 0 {
+            reduced[ri as usize] = (sa[i as usize] - 1) as u32;
             ri += 1;
         }
     }
@@ -269,7 +271,7 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
         sais_vec(sa.slice_to_mut(reduced.len()), &LexNames(&*reduced));
     } else {
         for i in (0..num_wstrs) {
-            sa[reduced[i] as usize] = i as usize;
+            sa[reduced[i as usize] as usize] = i;
         }
     }
 
@@ -278,38 +280,38 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
     bin_ptrs.clear();
 
     // Find the index of the last element of each bin in `sa`.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in bin_sizes.keys() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
     }
 
-    let mut j = 0us;
+    let mut j = 0u32;
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
         if stypes[i].is_valley() {
-            reduced[j] = i as u32;
+            reduced[j as usize] = i as u32;
             j += 1;
         }
     }
     for i in (0..num_wstrs) {
-        sa[i] = reduced[sa[i]] as usize;
+        sa[i as usize] = reduced[sa[i as usize] as usize];
     }
-    for i in (num_wstrs..sa.len()) {
-        sa[i] = 0;
+    for i in (num_wstrs..(sa.len() as u32)) {
+        sa[i as usize] = 0;
     }
 
     // Insert the valley suffixes.
     for i in (0..num_wstrs).rev() {
-        let sufi = sa[i];
-        sa[i] = 0;
+        let sufi = sa[i as usize];
+        sa[i as usize] = 0;
         let binp = &mut bin_ptrs[text.char_at(sufi)];
-        sa[*binp] = sufi;
+        sa[*binp as usize] = sufi;
         if *binp > 0 { *binp -= 1; }
     }
     debug!("after step 0: {:?}", sa);
 
     // Now find the start of each bin.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in bin_sizes.keys() {
         bin_ptrs.insert(c, sum);
         sum += bin_sizes[c];
@@ -317,19 +319,19 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
 
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
-    if stypes[lasti].is_desc() {
+    if stypes[lasti as usize].is_desc() {
         let binp = &mut bin_ptrs[lastc];
-        sa[*binp] = lasti;
+        sa[*binp as usize] = lasti;
         *binp += 1;
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti].is_desc() {
+            if stypes[lasti as usize].is_desc() {
                 let binp = &mut bin_ptrs[lastc];
                 // debug!("len(sa): {:?}, binp: {:?}", sa.len(), *binp);
-                sa[*binp] = lasti;
+                sa[*binp as usize] = lasti;
                 *binp += 1;
             }
         }
@@ -337,7 +339,7 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
     debug!("after step 1: {:?}", sa);
 
     // ... and find the end of each bin again.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in bin_sizes.keys() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
@@ -348,9 +350,9 @@ fn sais_vec<T>(sa: &mut [usize], text: &T)
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti].is_asc() {
+            if stypes[lasti as usize].is_asc() {
                 let binp = &mut bin_ptrs[lastc];
-                sa[*binp] = lasti;
+                sa[*binp as usize] = lasti;
                 *binp -= 1;
             }
         }
@@ -417,10 +419,11 @@ impl Ord for SuffixType {
 
 fn suffix_types<T>(text: &T) -> Vec<SuffixType>
         where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
-    let mut stypes: Vec<_> = repeat(Descending).take(text.len()).collect();
+    let mut stypes: Vec<_> =
+        repeat(Descending).take(text.len() as usize).collect();
     let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
 
-    stypes[text.len() - 1] = Descending;
+    stypes[(text.len() - 1) as usize] = Descending;
     let (mut lasti, mut lastc) = chars.next().unwrap();
     for (i, c) in chars {
         if c < lastc {
@@ -439,97 +442,6 @@ fn suffix_types<T>(text: &T) -> Vec<SuffixType>
     stypes
 }
 
-#[derive(Copy, Clone, Show)]
-struct WString {
-    sequence: usize,
-    start: usize,
-    end: usize,
-}
-
-impl WString {
-    fn start_at(sequence: usize, i: usize) -> WString {
-        WString { sequence: sequence, start: i, end: 0 }
-    }
-
-    fn index<'s, T>(&self, xs: &'s [T], i: usize) -> &'s T {
-        assert!(self.start + i < self.end);
-        &xs[self.start + i]
-    }
-
-    fn char_at<T: Text>(&self, text: &T, i: usize) -> u32 {
-        assert!(self.start + i < self.end);
-        text.char_at(self.start + i)
-    }
-
-    fn len(&self) -> usize {
-        self.end - self.start
-    }
-
-    // For debugging only.
-    fn _string<T: Text>(&self, text: &T) -> String {
-        text._string(self.start, self.end)
-    }
-}
-
-fn find_wstrings<T>(stypes: &[SuffixType], text: &T) -> Vec<WString>
-        where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
-    let mut wstrs: Vec<WString> = Vec::with_capacity(text.len() / 4);
-    let mut sequence = 0;
-    let mut cur = WString::start_at(sequence, 0);
-
-    for (bytei, c) in text.char_indices().map(|v| v.idx_char()) {
-        if stypes[bytei].is_valley() {
-            if cur.start == 0 {
-                cur.start = bytei;
-            } else {
-                cur.end = bytei + 1;
-                wstrs.push(cur);
-                sequence += 1;
-                cur = WString::start_at(sequence, bytei);
-            }
-        }
-    }
-    // We might need to do something different here if we don't have
-    // a sentinel.
-    // Although... Since we've converted everything to `u32`, we could just
-    // pick an arbitrary `u32` that is not a valid Unicode scalar value. ---AG
-    cur.end = text.len();
-    wstrs.push(cur);
-    wstrs
-}
-
-fn wstring_cmp<T: Text>(
-    text: &T,
-    stypes: &[SuffixType],
-    w1: &WString,
-    w2: &WString,
-) -> Ordering {
-    for i in 0..w1.len() {
-        // If we've run out of characters in w2, then w2 is a proper prefix
-        // of w1 (since we still have more characters in w1 to examine).
-        // Therefore, w1 > w2.
-        if i >= w2.len() {
-            return Greater;
-        }
-        match w1.char_at(text, i).cmp(&w2.char_at(text, i)) {
-            Equal => {
-                match w1.index(stypes, i).cmp(w2.index(stypes, i)) {
-                    Equal => { continue }
-                    ord => return ord,
-                }
-            }
-            ord => return ord,
-        }
-    }
-    // At this point, we know that w1 is some prefix of w2.
-    // If it's a proper prefix, then w1 < w2. Otherwise, they are equal.
-    if w1.len() < w2.len() {
-        Less
-    } else {
-        Equal
-    }
-}
-
 fn chrs(ns: &[u32]) -> String {
     ns.iter().map(|&n| chr(n)).collect()
 }
@@ -546,29 +458,29 @@ fn chrcmp(c1: &u32, c2: &u32) -> Ordering {
 trait Text {
     type Chars: Iterator + DoubleEndedIterator;
     type IdxChars: Iterator + DoubleEndedIterator;
-    fn len(&self) -> usize;
-    fn prev(&self, i: usize) -> (usize, u32);
-    fn next(&self, i: usize) -> (usize, u32);
-    fn char_at(&self, i: usize) -> u32;
+    fn len(&self) -> u32;
+    fn prev(&self, i: u32) -> (u32, u32);
+    fn next(&self, i: u32) -> (u32, u32);
+    fn char_at(&self, i: u32) -> u32;
     fn chars(&self) -> Self::Chars;
     fn char_indices(&self) -> Self::IdxChars;
 
     // For debugging. (This is why we aren't implementing slice syntax.)
-    fn _string_from(&self, start: usize) -> String;
-    fn _string(&self, start: usize, end: usize) -> String;
+    fn _string_from(&self, start: u32) -> String;
+    fn _string(&self, start: u32, end: u32) -> String;
 }
 
 struct Unicode<'s> {
     s: &'s str,
-    len: usize,
+    len: u32,
 }
 
 impl<'s> Unicode<'s> {
     fn from_str(s: &'s str) -> Unicode<'s> {
-        Unicode::from_str_len(s, s.len())
+        Unicode::from_str_len(s, s.len() as u32)
     }
 
-    fn from_str_len(s: &'s str, len: usize) -> Unicode<'s> {
+    fn from_str_len(s: &'s str, len: u32) -> Unicode<'s> {
         Unicode { s: s, len: len }
     }
 }
@@ -577,19 +489,19 @@ impl<'s> Text for Unicode<'s> {
     type Chars = str::Chars<'s>;
     type IdxChars = str::CharIndices<'s>;
 
-    fn len(&self) -> usize { self.len }
+    fn len(&self) -> u32 { self.len }
 
-    fn prev(&self, i: usize) -> (usize, u32) {
-        let CharRange { ch, next } = self.s.char_range_at_reverse(i);
-        (next, ch as u32)
+    fn prev(&self, i: u32) -> (u32, u32) {
+        let CharRange { ch, next } = self.s.char_range_at_reverse(i as usize);
+        (next as u32, ch as u32)
     }
 
-    fn next(&self, i: usize) -> (usize, u32) {
-        let CharRange { ch, next } = self.s.char_range_at(i);
-        (next, ch as u32)
+    fn next(&self, i: u32) -> (u32, u32) {
+        let CharRange { ch, next } = self.s.char_range_at(i as usize);
+        (next as u32, ch as u32)
     }
 
-    fn char_at(&self, i: usize) -> u32 { self.s.char_at(i) as u32 }
+    fn char_at(&self, i: u32) -> u32 { self.s.char_at(i as usize) as u32 }
 
     fn chars(&self) -> str::Chars<'s> {
         self.s.chars()
@@ -599,12 +511,12 @@ impl<'s> Text for Unicode<'s> {
         self.s.char_indices()
     }
 
-    fn _string_from(&self, start: usize) -> String {
-        self.s[start..].to_owned()
+    fn _string_from(&self, start: u32) -> String {
+        self.s[start as usize..].to_owned()
     }
 
-    fn _string(&self, start: usize, end: usize) -> String {
-        self.s[start..end].to_owned()
+    fn _string(&self, start: u32, end: u32) -> String {
+        self.s[start as usize .. end as usize].to_owned()
     }
 }
 
@@ -614,13 +526,13 @@ impl<'s> Text for LexNames<'s> {
     type Chars = slice::Iter<'s, u32>;
     type IdxChars = iter::Enumerate<slice::Iter<'s, u32>>;
 
-    fn len(&self) -> usize { self.0.len() }
+    fn len(&self) -> u32 { self.0.len() as u32 }
 
-    fn prev(&self, i: usize) -> (usize, u32) { (i - 1, self.0[i - 1]) }
+    fn prev(&self, i: u32) -> (u32, u32) { (i - 1, self.0[i as usize - 1]) }
 
-    fn next(&self, i: usize) -> (usize, u32) { (i + 1, self.0[i + 1]) }
+    fn next(&self, i: u32) -> (u32, u32) { (i + 1, self.0[i as usize + 1]) }
 
-    fn char_at(&self, i: usize) -> u32 { self.0[i] }
+    fn char_at(&self, i: u32) -> u32 { self.0[i as usize] }
 
     fn chars(&self) -> slice::Iter<'s, u32> {
         self.0.iter()
@@ -630,12 +542,12 @@ impl<'s> Text for LexNames<'s> {
         self.0.iter().enumerate()
     }
 
-    fn _string_from(&self, start: usize) -> String {
-        format!("{:?}", &self.0[start..])
+    fn _string_from(&self, start: u32) -> String {
+        format!("{:?}", &self.0[start as usize..])
     }
 
-    fn _string(&self, start: usize, end: usize) -> String {
-        format!("{:?}", &self.0[start..end])
+    fn _string(&self, start: u32, end: u32) -> String {
+        format!("{:?}", &self.0[start as usize .. end as usize])
     }
 }
 
@@ -666,47 +578,6 @@ impl Char for char {
     #[inline]
     fn char(self) -> u32 { self as u32 }
 }
-
-// enum Text<'s> {
-    // Unicode(&'s str, usize),
-    // LexNames(Vec<u32>),
-// }
-//
-// impl<'s> Text<'s> {
-    // fn from_str(s: &'s str) -> Text<'s> {
-        // Text::from_str_len(s, s.chars().count())
-    // }
-//
-    // fn from_str_len(s: &'s str, len: usize) -> Text<'s> {
-        // Text::Unicode(s, len)
-    // }
-//
-    // fn from_names(names: Vec<u32>) -> Text<'static> {
-        // Text::LexNames(names)
-    // }
-//
-    // fn len(&self) -> usize {
-        // match *self {
-            // Text::Unicode(_, len) => len,
-            // Text::LexNames(ref names) => names.len(),
-        // }
-    // }
-//
-    // fn char_at(&self, i: usize) -> u32 {
-        // match *self {
-            // Text::Unicode(s, _) => s.char_at(i) as u32,
-            // Text::LexNames(ref s) => s[i],
-        // }
-    // }
-//
-    // // Should be for debugging only!
-    // fn string_from(&self, i: usize) -> String {
-        // match *self {
-            // Text::Unicode(s, _) => s[i..].to_owned(),
-            // Text::LexNames(ref s) => format!("{:?}", s),
-        // }
-    // }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -750,11 +621,11 @@ mod tests {
 
         debug!("\n\ngot suffix array:");
         for &i in sa.iter() {
-            debug!("{:2}: {}", i, &s[i..]);
+            debug!("{:2}: {}", i, &s[i as usize..]);
         }
         debug!("\n\nnaive suffix array:");
         for &i in naive_table(&*s).iter() {
-            debug!("{:2}: {}", i, &s[i..]);
+            debug!("{:2}: {}", i, &s[i as usize..]);
         }
 
         // assert_eq!(sa, naive("32P32Pz"));

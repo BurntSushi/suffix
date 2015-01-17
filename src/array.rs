@@ -6,22 +6,22 @@ use SuffixArray;
 use self::SuffixType::{Ascending, Descending, Valley};
 
 const SENTINEL: u32 = 0x110000;
-const INVALID: usize = 0x110001; // this is wrong
+const INVALID: u32 = 0x110001; // this is wrong
 
 pub fn naive<'s>(s: &'s str) -> SuffixArray<'s> {
     make_suffix_array(s, naive_table(s))
 }
 
-pub fn naive_table<'s>(s: &'s str) -> Vec<usize> {
-    let mut table: Vec<_> = s.char_indices().map(|(i, _)| i).collect();
-    table.sort_by(|&a, &b| s[a..].cmp(&s[b..]));
+pub fn naive_table<'s>(s: &'s str) -> Vec<u32> {
+    let mut table: Vec<_> = s.char_indices().map(|(i, _)| i as u32).collect();
+    table.sort_by(|&a, &b| s[a as usize..].cmp(&s[b as usize..]));
     table
 }
 
-fn make_suffix_array<'s>(s: &'s str, table: Vec<usize>) -> SuffixArray<'s> {
-    let mut inverse: Vec<usize> = repeat(0).take(table.len()).collect();
+fn make_suffix_array<'s>(s: &'s str, table: Vec<u32>) -> SuffixArray<'s> {
+    let mut inverse: Vec<u32> = repeat(0).take(table.len()).collect();
     for (rank, &sufstart) in table.iter().enumerate() {
-        inverse[sufstart] = rank;
+        inverse[sufstart as usize] = rank as u32;
     }
     let lcp_lens = lcp_lens_linear(s, &*table, &*inverse);
     SuffixArray {
@@ -32,7 +32,7 @@ fn make_suffix_array<'s>(s: &'s str, table: Vec<usize>) -> SuffixArray<'s> {
     }
 }
 
-fn lcp_lens_linear(text: &str, table: &[usize], inv: &[usize]) -> Vec<usize> {
+fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
     // This is a linear time construction algorithm taken from the first
     // two slides of:
     // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
@@ -41,14 +41,15 @@ fn lcp_lens_linear(text: &str, table: &[usize], inv: &[usize]) -> Vec<usize> {
     // O(n) in space. The inverse suffix array gives us a special ordering
     // with which to compute the LCPs.
     let mut lcps: Vec<_> = repeat(0).take(table.len()).collect();
-    let mut len = 0;
+    let mut len = 0u32;
     for (sufi2, &rank) in inv.iter().enumerate() {
         if rank == 0 {
             continue
         }
-        let sufi1 = table[rank - 1];
-        len += lcp_len(&text[sufi1 + len..], &text[sufi2 + len..]);
-        lcps[rank] = len;
+        let sufi1 = table[(rank - 1) as usize];
+        len += lcp_len(&text[(sufi1 + len) as usize..],
+                       &text[(sufi2 as u32 + len) as usize..]);
+        lcps[rank as usize] = len;
         if len > 0 {
             len -= 1;
         }
@@ -56,7 +57,7 @@ fn lcp_lens_linear(text: &str, table: &[usize], inv: &[usize]) -> Vec<usize> {
     lcps
 }
 
-fn lcp_lens_quadratic(text: &str, table: &[usize]) -> Vec<usize> {
+fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
     // This is quadratic because there are N comparisons for each LCP.
     // But it is done in constant space.
 
@@ -64,31 +65,32 @@ fn lcp_lens_quadratic(text: &str, table: &[usize]) -> Vec<usize> {
     //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
     let mut lcps: Vec<_> = repeat(0).take(table.len()).collect();
     for (i, win) in table.windows(2).enumerate() {
-        lcps[i+1] = lcp_len(&text[win[0]..], &text[win[1]..]);
+        lcps[(i+1) as usize] = lcp_len(&text[win[0] as usize..],
+                                       &text[win[1] as usize..]);
     }
     lcps
 }
 
 /// Compute the length of the least common prefix between two strings.
-fn lcp_len(a: &str, b: &str) -> usize {
-    a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count()
+fn lcp_len(a: &str, b: &str) -> u32 {
+    a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count() as u32
 }
 
 pub fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
     make_suffix_array(text, sais_table(text))
 }
 
-pub fn sais_table<'s>(text: &'s str) -> Vec<usize> {
+pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     let mut chars = Vec::with_capacity(text.len());
     let mut chari = Vec::with_capacity(text.len());
     for (i, c) in text.char_indices() {
         chars.push(c as u32);
-        chari.push(i);
+        chari.push(i as u32);
     }
 
     // TODO: Figure out how to persist without the stupid sentinel.
     chars.push(SENTINEL);
-    chari.push(chars.len());
+    chari.push(chars.len() as u32);
 
     // println!("calling sais_vec");
     let char_sa = sais_vec(&*chars);
@@ -96,12 +98,12 @@ pub fn sais_table<'s>(text: &'s str) -> Vec<usize> {
     // Drop the first suffix, because it's always the sentinel, which we've
     // artificially inserted into the caller's string.
     for &char_sufstart in char_sa.iter().skip(1) {
-        byte_sa.push(chari[char_sufstart]);
+        byte_sa.push(chari[char_sufstart as usize]);
     }
     byte_sa
 }
 
-fn sais_vec(chars: &[u32]) -> Vec<usize> {
+fn sais_vec(chars: &[u32]) -> Vec<u32> {
     // println!("finding suffix types");
     let stypes = suffix_types(chars);
 
@@ -142,8 +144,8 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
     let mut cur_name = 0;
     let mut last_wstr = wstrs_sorted[0];
     let mut reduced: Vec<u32> = repeat(0).take(wstrs.len() + 1).collect();
-    reduced[last_wstr.sequence] = cur_name;
-    reduced[wstrs.len()] = SENTINEL;
+    reduced[last_wstr.sequence as usize] = cur_name;
+    reduced[wstrs.len() as usize] = SENTINEL;
     for &wstr in wstrs_sorted.iter().skip(1) {
         // let order = wstring_cmp(&*chars, &*stypes, &last_wstr, &wstr);
         // debug!("cmp({}, {}) == {}", last_wstr, wstr, order);
@@ -156,7 +158,7 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
                 cur_name += 1;
             }
         }
-        reduced[wstr.sequence] = cur_name;
+        reduced[wstr.sequence as usize] = cur_name;
         last_wstr = wstr;
     }
 
@@ -167,18 +169,19 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
     if duplicate_names {
         // println!("size of recursive case: {}, names: {}", reduced.len(), cur_name);
         let sa = sais_vec(&*reduced);
-        // let mut sa: Vec<usize> = range(0, reduced.len()).collect();
+        // let mut sa: Vec<u32> = range(0, reduced.len()).collect();
         // sa.sort_by(|&a, &b| reduced[a..].cmp(reduced[b..]));
-        // debug!("SA: {}", sa);
+        debug!("SA: {:?}", sa);
         // Drop the first suffix because it is always the sentinel.
         for (rank, &sufstart) in sa.iter().skip(1).enumerate() {
-            wstrs_sorted[rank] = wstrs[sufstart];
+            wstrs_sorted[rank as usize] = wstrs[sufstart as usize];
         }
 
         // DEBUG.
         debug!("\nreduced suffixes");
         for (i, &sufstart) in sa.iter().enumerate() {
-            debug!("{}: [{}..]: {:?}", i, sufstart, &reduced[sufstart..]);
+            debug!("{}: [{}..]: {:?}",
+                   i, sufstart, &reduced[sufstart as usize..]);
         }
         // DEBUG.
     }
@@ -195,8 +198,8 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
     // But, we still have sentinels, which tweak the ordering of characters.
     // If we get rid of sentinels, a BTreeMap is trivial to use.
     // Otherwise, we need to newtype a character and define an ordering on it.
-    let mut sa: Vec<isize> = repeat(-1).take(chars.len()).collect();
-    let mut bin_sizes: HashMap<u32, usize> = HashMap::new();
+    let mut sa: Vec<i32> = repeat(-1).take(chars.len()).collect();
+    let mut bin_sizes: HashMap<u32, u32> = HashMap::new();
     for &c in chars.iter() {
         match bin_sizes.entry(c) {
             Entry::Vacant(v) => { v.insert(1); }
@@ -211,10 +214,10 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
 
     // These are pointers to the start/end of each bin. They are regenerated
     // at each step.
-    let mut bin_ptrs: HashMap<u32, usize> = HashMap::new();
+    let mut bin_ptrs: HashMap<u32, u32> = HashMap::new();
 
     // Find the index of the last element of each bin in `sa`.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in alphas.iter() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
@@ -222,14 +225,14 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
 
     // Insert the valley suffixes.
     for wstr in wstrs_sorted.iter().rev() {
-        let binp = &mut bin_ptrs[chars[wstr.start]];
-        sa[*binp] = wstr.start as isize;
+        let binp = &mut bin_ptrs[chars[wstr.start as usize]];
+        sa[*binp as usize] = wstr.start as i32;
         if *binp > 0 { *binp -= 1; }
     }
     debug!("after step 0: {:?}", sa);
 
     // Now find the start of each bin.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in alphas.iter() {
         bin_ptrs.insert(c, sum);
         sum += bin_sizes[c];
@@ -240,14 +243,14 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
         let sufi = sa[i];
         if sufi > 0 && stypes[(sufi - 1) as usize].is_desc() {
             let binp = &mut bin_ptrs[chars[(sufi - 1) as usize]];
-            sa[*binp] = sufi - 1;
+            sa[*binp as usize] = sufi - 1;
             *binp += 1;
         }
     }
     debug!("after step 1: {:?}", sa);
 
     // ... and find the end of each bin again.
-    let mut sum = 0us;
+    let mut sum = 0u32;
     for &c in alphas.iter() {
         sum += bin_sizes[c];
         bin_ptrs.insert(c, sum - 1);
@@ -258,7 +261,7 @@ fn sais_vec(chars: &[u32]) -> Vec<usize> {
         let sufi = sa[i];
         if sufi > 0 && stypes[(sufi - 1) as usize].is_asc() {
             let binp = &mut bin_ptrs[chars[(sufi - 1) as usize]];
-            sa[*binp] = sufi - 1;
+            sa[*binp as usize] = sufi - 1;
             *binp -= 1;
         }
     }
@@ -343,26 +346,26 @@ fn suffix_types(chars: &[u32]) -> Vec<SuffixType> {
 
 #[derive(Copy, Clone, Show)]
 struct WString {
-    sequence: usize,
-    start: usize,
-    end: usize,
+    sequence: u32,
+    start: u32,
+    end: u32,
 }
 
 impl WString {
-    fn start_at(sequence: usize, i: usize) -> WString {
+    fn start_at(sequence: u32, i: u32) -> WString {
         WString { sequence: sequence, start: i, end: 0 }
     }
 
-    fn index<'s, T>(&self, xs: &'s [T], i: usize) -> &'s T {
+    fn index<'s, T>(&self, xs: &'s [T], i: u32) -> &'s T {
         assert!(self.start + i < self.end);
-        &xs[self.start + i]
+        &xs[(self.start + i) as usize]
     }
 
     fn slice<'s, T>(&self, xs: &'s [T]) -> &'s [T] {
-        &xs[self.start .. self.end]
+        &xs[self.start as usize .. self.end as usize]
     }
 
-    fn len(&self) -> usize {
+    fn len(&self) -> u32 {
         self.end - self.start
     }
 }
@@ -372,6 +375,7 @@ fn find_wstrings(stypes: &[SuffixType], chars: &[u32]) -> Vec<WString> {
     let mut sequence = 0;
     let mut cur = WString::start_at(sequence, 0);
     for (i, (c, t)) in chars.iter().zip(stypes.iter()).enumerate() {
+        let i = i as u32;
         if t.is_valley() {
             if cur.start == 0 {
                 cur.start = i;
@@ -387,7 +391,7 @@ fn find_wstrings(stypes: &[SuffixType], chars: &[u32]) -> Vec<WString> {
     // a sentinel.
     // Although... Since we've converted everything to `u32`, we could just
     // pick an arbitrary `u32` that is not a valid Unicode scalar value. ---AG
-    cur.end = chars.len();
+    cur.end = chars.len() as u32;
     wstrs.push(cur);
     wstrs
 }
