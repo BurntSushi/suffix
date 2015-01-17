@@ -6,6 +6,7 @@ use std::mem::transmute;
 use std::num::Int;
 use std::slice;
 use std::str::{self, CharRange};
+use std::u32;
 
 use SuffixArray;
 use self::SuffixType::{Ascending, Descending, Valley};
@@ -213,9 +214,10 @@ fn sais_vec<T>(sa: &mut [u32], text: &T)
     if num_wstrs == 0 { num_wstrs = 1; }
 
     let mut prev_sufi = 0u32; // the first suffix can never be a valley
-    let mut name = 1u32;
-    let mut duplicates = false;
-    for i in (num_wstrs..(sa.len() as u32)) { sa[i as usize] = 0; }
+    let mut name = 0u32;
+    // We set our "name buffer" to be max u32 values. Since there are at
+    // most n/2 wstrings, a name can never be greater than n/2.
+    for i in (num_wstrs..(sa.len() as u32)) { sa[i as usize] = u32::MAX; }
     for i in (0..num_wstrs) {
         let this_sufi = sa[i as usize];
         let mut diff = false;
@@ -247,8 +249,6 @@ fn sais_vec<T>(sa: &mut [u32], text: &T)
         if diff {
             name += 1;
             prev_sufi = this_sufi;
-        } else {
-            duplicates = true;
         }
         // This divide-by-2 trick only works because it's impossible to have
         // two wstrings start at adjacent locations (they must at least be
@@ -259,15 +259,15 @@ fn sais_vec<T>(sa: &mut [u32], text: &T)
     let mut reduced: Vec<u32> = repeat(0).take(num_wstrs as usize).collect();
     let mut ri = 0u32;
     for i in (num_wstrs..(sa.len() as u32)) {
-        if sa[i as usize] > 0 {
-            reduced[ri as usize] = (sa[i as usize] - 1) as u32;
+        if sa[i as usize] != u32::MAX {
+            reduced[ri as usize] = sa[i as usize] as u32;
             ri += 1;
         }
     }
 
     debug!("reduced: {:?}", reduced);
 
-    if duplicates {
+    if name < num_wstrs {
         sais_vec(sa.slice_to_mut(reduced.len()), &LexNames(&*reduced));
     } else {
         for i in (0..num_wstrs) {
@@ -613,9 +613,9 @@ mod tests {
 
     #[test]
     fn array_scratch() {
-        // let s = "tgtgtgtgcaccg";
+        let s = "tgtgtgtgcaccg";
         // let s = "AGCTTTTCATTCT";
-        let s = "bJONlJONd";
+        // let s = "bJONlJONd";
         let sa = sais_table(s);
         // let sa = sais("32P32Pz");
 
