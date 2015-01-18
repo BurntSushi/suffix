@@ -93,14 +93,15 @@ pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     let chars = text.chars().count();
     println!("Allocating suffix array of size {:?}", chars);
     let mut sa: Vec<u32> = repeat(0).take(chars).collect();
+    let mut stypes = SuffixTypes::new(text.len() as u32);
+    let mut bins = Bins::new();
 
-    // text.push('\x00');
-    // let sufs = sais_vec(Text::from_str(text.as_slice()));
-    sais_vec(&mut *sa, &Unicode::from_str(text));
+    sais_vec(&mut *sa, &mut stypes, &mut bins, &Unicode::from_str(text));
     sa
 }
 
-fn sais_vec<T>(sa: &mut [u32], text: &T)
+fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
+               bins: &mut Bins, text: &T)
         where T: Text,
               <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
               <<T as Text>::Chars as Iterator>::Item: Char {
@@ -112,105 +113,67 @@ fn sais_vec<T>(sa: &mut [u32], text: &T)
 
     for v in sa.iter_mut() { *v = 0; }
 
-    println!("finding suffix types");
-    let stypes = suffix_types(text);
-
-    // DEBUG.
-    debug!("\nsuffix types");
-    // for (c, t) in text.chars().map(|v| v.char()).zip(stypes.iter()) {
-    for (i, c) in text.char_indices().map(|v| v.idx_char()) {
-        debug!("{}:{}: {:?}", i, chr(c), stypes[i]);
-    }
-    // DEBUG.
-
-    println!("Find the size of each bin");
-    let mut bin_sizes: BTreeMap<u32, u32> = BTreeMap::new();
-    for c in text.chars().map(|c| c.char()) {
-        match bin_sizes.entry(c) {
-            Entry::Vacant(v) => { v.insert(1); }
-            Entry::Occupied(mut v) => { *v.get_mut() += 1; }
-        }
-    }
-
-    // These are pointers to the start/end of each bin. They are regenerated
-    // at each step.
-    let mut bin_ptrs: BTreeMap<u32, u32> = BTreeMap::new();
-
-    // Find the index of the last element of each bin in `sa`.
-    let mut sum = 0u32;
-    for &c in bin_sizes.keys() {
-        sum += bin_sizes[c];
-        bin_ptrs.insert(c, sum - 1);
-    }
+    stypes.compute(text);
+    bins.find_sizes(text.chars().map(|c| c.char()));
+    bins.find_tail_pointers();
 
     // Insert the valley suffixes.
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
-        if stypes[i].is_valley() {
-            let binp = &mut bin_ptrs[c];
-            sa[*binp as usize] = i as u32;
-            if *binp > 0 { *binp -= 1; }
+        if stypes.is_valley(i as u32) {
+            bins.tail_insert(sa, i as u32, c);
         }
     }
     debug!("{{wstr}} after step 0: {:?}", sa);
+    println!("wstr step 0 complete");
 
     // Now find the start of each bin.
-    let mut sum = 0u32;
-    for &c in bin_sizes.keys() {
-        bin_ptrs.insert(c, sum);
-        sum += bin_sizes[c];
-    }
+    bins.find_head_pointers();
+    println!("wstr step 1 half complete");
 
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
-    if stypes[lasti as usize].is_desc() {
-        let binp = &mut bin_ptrs[lastc];
-        sa[*binp as usize] = lasti;
-        *binp += 1;
+    if stypes.is_desc(lasti) {
+        bins.head_insert(sa, lasti, lastc);
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti as usize].is_desc() {
-                let binp = &mut bin_ptrs[lastc];
-                sa[*binp as usize] = lasti;
-                *binp += 1;
+            if stypes.is_desc(lasti) {
+                bins.head_insert(sa, lasti, lastc);
             }
         }
     }
 
     debug!("{{wstr}} after step 1: {:?}", sa);
+    println!("wstr step 1 complete");
 
-    // ... and find the end of each bin again.
-    let mut sum = 0u32;
-    for &c in bin_sizes.keys() {
-        sum += bin_sizes[c];
-        bin_ptrs.insert(c, sum - 1);
-    }
+    bins.find_tail_pointers();
 
     // Insert the ascending suffixes.
     for i in (0..sa.len()).rev() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti as usize].is_asc() {
-                let binp = &mut bin_ptrs[lastc];
-                sa[*binp as usize] = lasti;
-                *binp -= 1;
+            if stypes.is_asc(lasti) {
+                bins.tail_insert(sa, lasti, lastc);
             }
         }
     }
 
     debug!("{{wstr}} after step 2: {:?}", sa);
+    println!("wstr step 2 complete");
 
     let mut num_wstrs = 0u32;
     for i in 0..sa.len() {
         let sufi = sa[i];
-        if stypes[sufi as usize].is_valley() {
+        if stypes.is_valley(sufi) {
             sa[num_wstrs as usize] = sufi;
             num_wstrs += 1;
         }
     }
+    // This check is necessary because we don't have a sentinel, which would
+    // normally guarantee at least one wstring.
     if num_wstrs == 0 { num_wstrs = 1; }
 
     let mut prev_sufi = 0u32; // the first suffix can never be a valley
@@ -233,14 +196,14 @@ fn sais_vec<T>(sa: &mut [u32], text: &T)
             }
             let this_char = text.char_at(thisi);
             let prev_char = text.char_at(previ);
-            let this_ty = stypes[thisi as usize];
-            let prev_ty = stypes[previ as usize];
-            if prev_sufi == 0 || this_char != prev_char || this_ty != prev_ty {
+            if prev_sufi == 0
+                    || this_char != prev_char
+                    || !stypes.equal(thisi, previ) {
                 diff = true;
                 break;
             }
-            if thisi > this_sufi && (stypes[thisi as usize].is_valley()
-                                     || stypes[previ as usize].is_valley()) {
+            if thisi > this_sufi && (stypes.is_valley(thisi)
+                                     || stypes.is_valley(previ)) {
                 break;
             }
             thisi = text.next(thisi).0;
@@ -256,108 +219,105 @@ fn sais_vec<T>(sa: &mut [u32], text: &T)
         sa[(num_wstrs + (this_sufi / 2)) as usize] = name - 1;
     }
 
-    let mut reduced: Vec<u32> = repeat(0).take(num_wstrs as usize).collect();
-    let mut ri = 0u32;
-    for i in (num_wstrs..(sa.len() as u32)) {
+    println!("{:?} lexical names found", name);
+    debug!("{:?} lexical names found", name);
+
+    // We've inserted the lexical names into the latter half of the suffix
+    // array, but it's sparse. so let's smush them all up to the end.
+    let mut j = sa.len() as u32 - 1;
+    for i in (num_wstrs..(sa.len() as u32)).rev() {
         if sa[i as usize] != u32::MAX {
-            reduced[ri as usize] = sa[i as usize] as u32;
-            ri += 1;
+            sa[j as usize] = sa[i as usize];
+            j -= 1;
         }
     }
 
-    debug!("reduced: {:?}", reduced);
+    println!("built reduced string (size: {:?})", num_wstrs);
+    debug!("reduced: {:?}", &sa[sa.len() - (num_wstrs as usize) ..]);
 
     if name < num_wstrs {
-        sais_vec(sa.slice_to_mut(reduced.len()), &LexNames(&*reduced));
+        let split_at = sa.len() - (num_wstrs as usize);
+        let (r_sa, r_text) = sa.split_at_mut(split_at);
+        sais_vec(r_sa.slice_to_mut(num_wstrs as usize), stypes, bins,
+                 &LexNames(r_text));
+        stypes.compute(text);
     } else {
         for i in (0..num_wstrs) {
-            sa[reduced[i as usize] as usize] = i;
+            let reducedi = sa[((sa.len() as u32) - num_wstrs + i) as usize];
+            sa[reducedi as usize] = i;
         }
     }
 
     debug!("reduced sa: {:?}", sa);
+    println!("SA of reduced string computed");
 
-    bin_ptrs.clear();
-
-    // Find the index of the last element of each bin in `sa`.
-    let mut sum = 0u32;
-    for &c in bin_sizes.keys() {
-        sum += bin_sizes[c];
-        bin_ptrs.insert(c, sum - 1);
-    }
-
-    let mut j = 0u32;
+    let mut j = sa.len() as u32 - num_wstrs;
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
-        if stypes[i].is_valley() {
-            reduced[j as usize] = i as u32;
+        if stypes.is_valley(i as u32) {
+            sa[j as usize] = i as u32;
             j += 1;
         }
     }
     for i in (0..num_wstrs) {
-        sa[i as usize] = reduced[sa[i as usize] as usize];
+        let sufi = sa[i as usize];
+        sa[i as usize] = sa[(sa.len() as u32 - num_wstrs + sufi) as usize];
     }
     for i in (num_wstrs..(sa.len() as u32)) {
         sa[i as usize] = 0;
     }
+
+    bins.find_sizes(text.chars().map(|c| c.char()));
+    bins.find_tail_pointers();
 
     // Insert the valley suffixes.
     for i in (0..num_wstrs).rev() {
         let sufi = sa[i as usize];
         sa[i as usize] = 0;
-        let binp = &mut bin_ptrs[text.char_at(sufi)];
-        sa[*binp as usize] = sufi;
-        if *binp > 0 { *binp -= 1; }
+        bins.tail_insert(sa, sufi, text.char_at(sufi));
     }
     debug!("after step 0: {:?}", sa);
+    println!("step 0 complete");
 
     // Now find the start of each bin.
-    let mut sum = 0u32;
-    for &c in bin_sizes.keys() {
-        bin_ptrs.insert(c, sum);
-        sum += bin_sizes[c];
-    }
+    bins.find_head_pointers();
+    println!("step 1 half complete");
 
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
-    if stypes[lasti as usize].is_desc() {
-        let binp = &mut bin_ptrs[lastc];
-        sa[*binp as usize] = lasti;
-        *binp += 1;
+    if stypes.is_desc(lasti) {
+        bins.head_insert(sa, lasti, lastc);
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti as usize].is_desc() {
-                let binp = &mut bin_ptrs[lastc];
-                // debug!("len(sa): {:?}, binp: {:?}", sa.len(), *binp);
-                sa[*binp as usize] = lasti;
-                *binp += 1;
+            if stypes.is_desc(lasti) {
+                bins.head_insert(sa, lasti, lastc);
             }
         }
     }
     debug!("after step 1: {:?}", sa);
+    println!("step 1 complete");
 
     // ... and find the end of each bin again.
-    let mut sum = 0u32;
-    for &c in bin_sizes.keys() {
-        sum += bin_sizes[c];
-        bin_ptrs.insert(c, sum - 1);
-    }
+    bins.find_tail_pointers();
 
     // Insert the ascending suffixes.
     for i in (0..sa.len()).rev() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            if stypes[lasti as usize].is_asc() {
-                let binp = &mut bin_ptrs[lastc];
-                sa[*binp as usize] = lasti;
-                *binp -= 1;
+            if stypes.is_asc(lasti) {
+                bins.tail_insert(sa, lasti, lastc);
             }
         }
     }
     debug!("after step 2: {:?}", sa);
+    println!("step 2 complete");
+}
+
+struct SuffixTypes {
+    types: Vec<SuffixType>,
 }
 
 #[derive(Clone, Copy, Eq, Show)]
@@ -365,6 +325,49 @@ enum SuffixType {
     Ascending,
     Descending,
     Valley,
+}
+
+impl SuffixTypes {
+    fn new(num_bytes: u32) -> SuffixTypes {
+        let mut stypes = Vec::with_capacity(num_bytes as usize);
+        unsafe { stypes.set_len(num_bytes as usize); }
+        SuffixTypes { types: stypes }
+    }
+
+    fn compute<'a, T>(&mut self, text: &T)
+            where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
+        println!("finding suffix types");
+
+        let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
+
+        // for t in self.types.iter_mut() { *t = Descending; }
+        self.types[(text.len() - 1) as usize] = Descending;
+        let (mut lasti, mut lastc) = chars.next().unwrap();
+        for (i, c) in chars {
+            if c < lastc {
+                self.types[i] = Ascending;
+            } else if c > lastc {
+                self.types[i] = Descending;
+            } else {
+                self.types[i] = self.types[lasti].inherit();
+            }
+            if self.types[i].is_desc() && self.types[lasti].is_asc() {
+                self.types[lasti] = Valley;
+            }
+            lastc = c;
+            lasti = i;
+        }
+        for (i, t) in self.types.iter().enumerate() {
+            debug!("suffix type for ({:?}, {:?}): {:?}",
+                   i, text.char_at(i as u32), t);
+        }
+    }
+
+    fn ty(&self, i: u32) -> SuffixType { self.types[i as usize] }
+    fn is_asc(&self, i: u32) -> bool { self.ty(i).is_asc() }
+    fn is_desc(&self, i: u32) -> bool { self.ty(i).is_desc() }
+    fn is_valley(&self, i: u32) -> bool { self.ty(i).is_valley() }
+    fn equal(&self, i: u32, j: u32) -> bool { self.ty(i) == self.ty(j) }
 }
 
 impl SuffixType {
@@ -398,61 +401,72 @@ impl PartialEq for SuffixType {
     }
 }
 
-impl PartialOrd for SuffixType {
-    fn partial_cmp(&self, other: &SuffixType) -> Option<Ordering> {
-        Some(if self.is_desc() && other.is_asc() {
-            Less
-        } else if self.is_asc() && other.is_desc() {
-            Greater
-        } else {
-            assert!(self == other);
-            Equal
-        })
-    }
+struct Bins {
+    alphas: Vec<u32>,
+    sizes: Vec<u32>,
+    ptrs: BTreeMap<u32, u32>,
 }
 
-impl Ord for SuffixType {
-    fn cmp(&self, other: &SuffixType) -> Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-fn suffix_types<T>(text: &T) -> Vec<SuffixType>
-        where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
-    let mut stypes: Vec<_> =
-        repeat(Descending).take(text.len() as usize).collect();
-    let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
-
-    stypes[(text.len() - 1) as usize] = Descending;
-    let (mut lasti, mut lastc) = chars.next().unwrap();
-    for (i, c) in chars {
-        if c < lastc {
-            stypes[i] = Ascending;
-        } else if c > lastc {
-            stypes[i] = Descending;
-        } else {
-            stypes[i] = stypes[lasti].inherit();
+impl Bins {
+    fn new() -> Bins {
+        Bins {
+            alphas: Vec::with_capacity(1_000),
+            sizes: repeat(0).take(500_000).collect(),
+            ptrs: BTreeMap::new(),
         }
-        if stypes[i].is_desc() && stypes[lasti].is_asc() {
-            stypes[lasti] = Valley;
-        }
-        lastc = c;
-        lasti = i;
     }
-    stypes
-}
 
-fn chrs(ns: &[u32]) -> String {
-    ns.iter().map(|&n| chr(n)).collect()
-}
+    fn find_sizes<I>(&mut self, mut chars: I) where I: Iterator<Item=u32> {
+        self.ptrs = BTreeMap::new();
+        // self.ptrs.clear();
 
-fn chr(n: u32) -> char {
-    ::std::char::from_u32(n).unwrap()
-}
+        println!("Find the size of each bin");
+        unsafe { self.alphas.set_len(0); }
+        for size in self.sizes.iter_mut() { *size = 0; }
+        for c in chars {
+            self.inc_size(c);
+            if self.size(c) == 1 {
+                self.alphas.push(c);
+            }
+        }
+        self.alphas.sort();
+        println!("alphabet size: {:?}", self.alphas.len());
+    }
 
-#[inline]
-fn chrcmp(c1: &u32, c2: &u32) -> Ordering {
-    c1.cmp(c2)
+    fn find_head_pointers(&mut self) {
+        let mut sum = 0u32;
+        for &c in self.alphas.iter() {
+            // self.ptrs[c as usize] = sum;
+            self.ptrs.insert(c, sum);
+            sum += self.size(c);
+        }
+    }
+
+    fn find_tail_pointers(&mut self) {
+        let mut sum = 0u32;
+        for &c in self.alphas.iter() {
+            sum += self.size(c);
+            // self.ptrs[c as usize] = sum - 1;
+            self.ptrs.insert(c, sum - 1);
+        }
+    }
+
+    #[inline]
+    fn head_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
+        let ptr = &mut self.ptrs[c];
+        sa[*ptr as usize] = i;
+        *ptr += 1;
+    }
+
+    #[inline]
+    fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
+        let ptr = &mut self.ptrs[c];
+        sa[*ptr as usize] = i;
+        if *ptr > 0 { *ptr -= 1; }
+    }
+
+    #[inline] fn size(&self, c: u32) -> u32 { self.sizes[c as usize] }
+    #[inline] fn inc_size(&mut self, c: u32) { self.sizes[c as usize] += 1; }
 }
 
 trait Text {
@@ -464,6 +478,7 @@ trait Text {
     fn char_at(&self, i: u32) -> u32;
     fn chars(&self) -> Self::Chars;
     fn char_indices(&self) -> Self::IdxChars;
+    fn wstring_equal(&self, i: u32, j: u32) -> bool;
 
     // For debugging. (This is why we aren't implementing slice syntax.)
     fn _string_from(&self, start: u32) -> String;
@@ -511,6 +526,8 @@ impl<'s> Text for Unicode<'s> {
         self.s.char_indices()
     }
 
+    fn wstring_equal(&self, i: u32, j: u32) -> bool { true }
+
     fn _string_from(&self, start: u32) -> String {
         self.s[start as usize..].to_owned()
     }
@@ -541,6 +558,8 @@ impl<'s> Text for LexNames<'s> {
     fn char_indices(&self) -> iter::Enumerate<slice::Iter<'s, u32>> {
         self.0.iter().enumerate()
     }
+
+    fn wstring_equal(&self, i: u32, j: u32) -> bool { true }
 
     fn _string_from(&self, start: u32) -> String {
         format!("{:?}", &self.0[start as usize..])
@@ -584,7 +603,7 @@ mod tests {
     extern crate test;
 
     use self::test::Bencher;
-    use quickcheck::{TestResult, quickcheck};
+    use quickcheck::{TestResult, QuickCheck};
     use super::{naive, naive_table, sais_table, sais};
 
     #[test]
@@ -608,14 +627,17 @@ mod tests {
             if s.is_empty() { return TestResult::discard(); }
             TestResult::from_bool(naive(&*s) == sais(&*s))
         }
-        quickcheck(prop as fn(String) -> TestResult);
+        QuickCheck::new()
+            .tests(1000)
+            .max_tests(50000)
+            .quickcheck(prop as fn(String) -> TestResult);
     }
 
     #[test]
     fn array_scratch() {
-        let s = "tgtgtgtgcaccg";
+        // let s = "tgtgtgtgcaccg";
         // let s = "AGCTTTTCATTCT";
-        // let s = "bJONlJONd";
+        let s = "QQR";
         let sa = sais_table(s);
         // let sa = sais("32P32Pz");
 
