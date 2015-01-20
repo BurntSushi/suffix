@@ -92,7 +92,12 @@ pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
 
     let chars = text.chars().count();
     println!("Allocating suffix array of size {:?}", chars);
-    let mut sa: Vec<u32> = repeat(0).take(chars).collect();
+    let mut sa: Vec<u32> = Vec::with_capacity(chars);
+    unsafe { sa.set_len(chars); }
+    for i in (0..chars) { sa[i] = 0; }
+    // let mut sa: Vec<u32> = repeat(0).take(chars).collect();
+    println!("done allocating suffix array");
+
     let mut stypes = SuffixTypes::new(text.len() as u32);
     let mut bins = Bins::new();
 
@@ -276,7 +281,7 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         bins.tail_insert(sa, sufi, text.char_at(sufi));
     }
     debug!("after step 0: {:?}", sa);
-    println!("step 0 complete");
+    println!("step 0 complete (added {:?} suffixes)", num_wstrs);
 
     // Now find the start of each bin.
     bins.find_head_pointers();
@@ -329,8 +334,10 @@ enum SuffixType {
 
 impl SuffixTypes {
     fn new(num_bytes: u32) -> SuffixTypes {
+        println!("allocating suffix types...");
         let mut stypes = Vec::with_capacity(num_bytes as usize);
         unsafe { stypes.set_len(num_bytes as usize); }
+        println!("...done allocating suffix types.");
         SuffixTypes { types: stypes }
     }
 
@@ -363,14 +370,20 @@ impl SuffixTypes {
         }
     }
 
+    #[inline]
     fn ty(&self, i: u32) -> SuffixType { self.types[i as usize] }
+    #[inline]
     fn is_asc(&self, i: u32) -> bool { self.ty(i).is_asc() }
+    #[inline]
     fn is_desc(&self, i: u32) -> bool { self.ty(i).is_desc() }
+    #[inline]
     fn is_valley(&self, i: u32) -> bool { self.ty(i).is_valley() }
+    #[inline]
     fn equal(&self, i: u32, j: u32) -> bool { self.ty(i) == self.ty(j) }
 }
 
 impl SuffixType {
+    #[inline]
     fn is_asc(&self) -> bool {
         match *self {
             Ascending | Valley => true,
@@ -378,10 +391,12 @@ impl SuffixType {
         }
     }
 
+    #[inline]
     fn is_desc(&self) -> bool {
         if let Descending = *self { true } else { false }
     }
 
+    #[inline]
     fn is_valley(&self) -> bool {
         if let Valley = *self { true } else { false }
     }
@@ -395,6 +410,7 @@ impl SuffixType {
 }
 
 impl PartialEq for SuffixType {
+    #[inline]
     fn eq(&self, other: &SuffixType) -> bool {
         (self.is_asc() && other.is_asc())
         || (self.is_desc() && other.is_desc())
@@ -409,16 +425,18 @@ struct Bins {
 
 impl Bins {
     fn new() -> Bins {
-        Bins {
+        println!("Allocating bins...");
+        let b = Bins {
             alphas: Vec::with_capacity(1_000),
-            sizes: repeat(0).take(500_000).collect(),
-            ptrs: BTreeMap::new(),
-        }
+            sizes: repeat(0).take(3_000_000).collect(),
+            ptrs: BTreeMap::with_b(6),
+        };
+        println!("... done allocating bins.");
+        b
     }
 
     fn find_sizes<I>(&mut self, mut chars: I) where I: Iterator<Item=u32> {
-        self.ptrs = BTreeMap::new();
-        // self.ptrs.clear();
+        self.ptrs.clear();
 
         println!("Find the size of each bin");
         unsafe { self.alphas.set_len(0); }
@@ -436,7 +454,6 @@ impl Bins {
     fn find_head_pointers(&mut self) {
         let mut sum = 0u32;
         for &c in self.alphas.iter() {
-            // self.ptrs[c as usize] = sum;
             self.ptrs.insert(c, sum);
             sum += self.size(c);
         }
@@ -446,7 +463,6 @@ impl Bins {
         let mut sum = 0u32;
         for &c in self.alphas.iter() {
             sum += self.size(c);
-            // self.ptrs[c as usize] = sum - 1;
             self.ptrs.insert(c, sum - 1);
         }
     }
@@ -462,7 +478,7 @@ impl Bins {
     fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
         let ptr = &mut self.ptrs[c];
         sa[*ptr as usize] = i;
-        if *ptr > 0 { *ptr -= 1; }
+        *ptr -= 1;
     }
 
     #[inline] fn size(&self, c: u32) -> u32 { self.sizes[c as usize] }
@@ -504,18 +520,22 @@ impl<'s> Text for Unicode<'s> {
     type Chars = str::Chars<'s>;
     type IdxChars = str::CharIndices<'s>;
 
+    #[inline]
     fn len(&self) -> u32 { self.len }
 
+    #[inline]
     fn prev(&self, i: u32) -> (u32, u32) {
         let CharRange { ch, next } = self.s.char_range_at_reverse(i as usize);
         (next as u32, ch as u32)
     }
 
+    #[inline]
     fn next(&self, i: u32) -> (u32, u32) {
         let CharRange { ch, next } = self.s.char_range_at(i as usize);
         (next as u32, ch as u32)
     }
 
+    #[inline]
     fn char_at(&self, i: u32) -> u32 { self.s.char_at(i as usize) as u32 }
 
     fn chars(&self) -> str::Chars<'s> {
@@ -543,12 +563,16 @@ impl<'s> Text for LexNames<'s> {
     type Chars = slice::Iter<'s, u32>;
     type IdxChars = iter::Enumerate<slice::Iter<'s, u32>>;
 
+    #[inline]
     fn len(&self) -> u32 { self.0.len() as u32 }
 
+    #[inline]
     fn prev(&self, i: u32) -> (u32, u32) { (i - 1, self.0[i as usize - 1]) }
 
+    #[inline]
     fn next(&self, i: u32) -> (u32, u32) { (i + 1, self.0[i as usize + 1]) }
 
+    #[inline]
     fn char_at(&self, i: u32) -> u32 { self.0[i as usize] }
 
     fn chars(&self) -> slice::Iter<'s, u32> {

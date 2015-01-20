@@ -21,6 +21,10 @@ doc = false
 test = false
 bench = false
 
+[profile.release]
+opt-level = 3
+# lto = true
+
 [dependencies]
 rustc-serialize = "*"
 log = "*"

@@ -26,7 +26,9 @@ struct Args {
 fn main() {
     let args: Args = Docopt::new(USAGE).and_then(|d| d.decode())
                                        .unwrap_or_else(|e| e.exit());
+    println!("reading file...");
     let data = File::open(&Path::new(args.arg_file)).read_to_string().unwrap();
+    println!("... done reading file.");
     let data = data.trim();
     println!("data length: {}", data.len());
     if args.cmd_naive {
