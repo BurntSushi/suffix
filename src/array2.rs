@@ -125,7 +125,7 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
     // Insert the valley suffixes.
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
         if stypes.is_valley(i as u32) {
-            bins.tail_insert(sa, i as u32, c);
+            bins.tail_insert(sa, i as u32, c as usize);
         }
     }
     debug!("{{wstr}} after step 0: {:?}", sa);
@@ -138,14 +138,15 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
     if stypes.is_desc(lasti) {
-        bins.head_insert(sa, lasti, lastc);
+        bins.head_insert(sa, lasti, lastc as usize);
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
+            debug!("WSTR STEP 1: {:?}, {:?}", lasti, lastc);
             if stypes.is_desc(lasti) {
-                bins.head_insert(sa, lasti, lastc);
+                bins.head_insert(sa, lasti, lastc as usize);
             }
         }
     }
@@ -161,7 +162,7 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
             if stypes.is_asc(lasti) {
-                bins.tail_insert(sa, lasti, lastc);
+                bins.tail_insert(sa, lasti, lastc as usize);
             }
         }
     }
@@ -278,7 +279,7 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
     for i in (0..num_wstrs).rev() {
         let sufi = sa[i as usize];
         sa[i as usize] = 0;
-        bins.tail_insert(sa, sufi, text.char_at(sufi));
+        bins.tail_insert(sa, sufi, text.char_at(sufi) as usize);
     }
     debug!("after step 0: {:?}", sa);
     println!("step 0 complete (added {:?} suffixes)", num_wstrs);
@@ -290,14 +291,15 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
     if stypes.is_desc(lasti) {
-        bins.head_insert(sa, lasti, lastc);
+        bins.head_insert(sa, lasti, lastc as usize);
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
+            debug!("STEP 1: {:?}, {:?}", lasti, lastc);
             if stypes.is_desc(lasti) {
-                bins.head_insert(sa, lasti, lastc);
+                bins.head_insert(sa, lasti, lastc as usize);
             }
         }
     }
@@ -313,7 +315,7 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
             if stypes.is_asc(lasti) {
-                bins.tail_insert(sa, lasti, lastc);
+                bins.tail_insert(sa, lasti, lastc as usize);
             }
         }
     }
@@ -346,8 +348,6 @@ impl SuffixTypes {
         println!("finding suffix types");
 
         let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
-
-        // for t in self.types.iter_mut() { *t = Descending; }
         self.types[(text.len() - 1) as usize] = Descending;
         let (mut lasti, mut lastc) = chars.next().unwrap();
         for (i, c) in chars {
@@ -364,10 +364,10 @@ impl SuffixTypes {
             lastc = c;
             lasti = i;
         }
-        for (i, t) in self.types.iter().enumerate() {
-            debug!("suffix type for ({:?}, {:?}): {:?}",
-                   i, text.char_at(i as u32), t);
-        }
+        // for (i, t) in self.types.iter().enumerate() {
+            // debug!("suffix type for ({:?}, {:?}): {:?}",
+                   // i, text.char_at(i as u32), t);
+        // }
     }
 
     #[inline]
@@ -420,23 +420,25 @@ impl PartialEq for SuffixType {
 struct Bins {
     alphas: Vec<u32>,
     sizes: Vec<u32>,
-    ptrs: BTreeMap<u32, u32>,
+    ptrs: Vec<u32>,
+    // ptrs: BTreeMap<u32, u32>,
 }
 
 impl Bins {
     fn new() -> Bins {
         println!("Allocating bins...");
         let b = Bins {
-            alphas: Vec::with_capacity(1_000),
-            sizes: repeat(0).take(3_000_000).collect(),
-            ptrs: BTreeMap::with_b(6),
+            alphas: Vec::with_capacity(10_000),
+            sizes: Vec::with_capacity(10_000),
+            ptrs: repeat(0).take(500_000).collect(),
+            // ptrs: BTreeMap::with_b(6),
         };
         println!("... done allocating bins.");
         b
     }
 
     fn find_sizes<I>(&mut self, mut chars: I) where I: Iterator<Item=u32> {
-        self.ptrs.clear();
+        // self.ptrs.clear();
 
         println!("Find the size of each bin");
         unsafe { self.alphas.set_len(0); }
@@ -454,7 +456,8 @@ impl Bins {
     fn find_head_pointers(&mut self) {
         let mut sum = 0u32;
         for &c in self.alphas.iter() {
-            self.ptrs.insert(c, sum);
+            // self.ptrs.insert(c, sum);
+            self.ptrs[c as usize] = sum;
             sum += self.size(c);
         }
     }
@@ -463,26 +466,50 @@ impl Bins {
         let mut sum = 0u32;
         for &c in self.alphas.iter() {
             sum += self.size(c);
-            self.ptrs.insert(c, sum - 1);
+            self.ptrs[c as usize] = sum - 1;
+            // self.ptrs.insert(c, sum - 1);
+        }
+    }
+
+    #[inline(always)]
+    fn head_insert(&mut self, sa: &mut [u32], i: u32, c: usize) {
+        // let ptr = &mut self.ptrs[c];
+        // sa[*ptr as usize] = i;
+        // *ptr += 1;
+
+        unsafe {
+            sa[*self.ptrs.get_unchecked(c) as usize] = i;
+            *self.ptrs.get_unchecked_mut(c) += 1;
+        }
+    }
+
+    #[inline(always)]
+    fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: usize) {
+        // let ptr = &mut self.ptrs[c];
+        // sa[*ptr as usize] = i;
+        // *ptr -= 1;
+
+        // sa[self.ptrs[c as usize] as usize] = i;
+        // self.ptrs[c as usize] -= 1;
+
+        unsafe {
+            sa[*self.ptrs.get_unchecked(c) as usize] = i;
+            *self.ptrs.get_unchecked_mut(c) -= 1;
         }
     }
 
     #[inline]
-    fn head_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
-        let ptr = &mut self.ptrs[c];
-        sa[*ptr as usize] = i;
-        *ptr += 1;
-    }
-
-    #[inline]
-    fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
-        let ptr = &mut self.ptrs[c];
-        sa[*ptr as usize] = i;
-        *ptr -= 1;
+    fn inc_size(&mut self, c: u32) {
+        if c as usize >= self.sizes.len() {
+            let (len, new_len) = (self.sizes.len(), 1 + (c as usize));
+            self.sizes.reserve(new_len - len);
+            unsafe { self.sizes.set_len(new_len); }
+            for v in self.sizes.slice_mut(len, new_len).iter_mut() { *v = 0; }
+        }
+        self.sizes[c as usize] += 1;
     }
 
     #[inline] fn size(&self, c: u32) -> u32 { self.sizes[c as usize] }
-    #[inline] fn inc_size(&mut self, c: u32) { self.sizes[c as usize] += 1; }
 }
 
 trait Text {
@@ -659,9 +686,9 @@ mod tests {
 
     #[test]
     fn array_scratch() {
-        // let s = "tgtgtgtgcaccg";
+        let s = "tgtgtgtgcaccg";
         // let s = "AGCTTTTCATTCT";
-        let s = "QQR";
+        // let s = "QQR";
         let sa = sais_table(s);
         // let sa = sais("32P32Pz");
 
