@@ -23,8 +23,6 @@ pub use array::naive as array_naive;
 pub use array::{naive_table, sais_table};
 pub use array2::sais_table as sais_table2;
 pub use array2::sais as sais2;
-pub use array3::sais_table as sais_table3;
-pub use array4::sais_table as sais_table4;
 
 #[derive(Eq, PartialEq)]
 pub struct SuffixArray<'s> {
@@ -362,6 +360,4 @@ impl<'t> Iterator for SuffixIndices<'t> {
 
 mod array;
 mod array2;
-mod array3;
-mod array4;
 mod to_suffix_tree;
