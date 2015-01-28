@@ -22,13 +22,16 @@ test = false
 bench = false
 
 [profile.release]
-opt-level = 3
+opt-level = 2
+debug = true
 # lto = true
 
 [dependencies]
 rustc-serialize = "*"
 log = "*"
 docopt = "*"
+stopwatch = "*"
+streaming-stats = "*"
 
 [dev-dependencies]
 quickcheck = "*"

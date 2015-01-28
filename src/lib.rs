@@ -9,6 +9,8 @@
 
 #[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
+extern crate stopwatch;
+extern crate stats;
 
 use std::collections::btree_map::{self, BTreeMap};
 use std::collections::RingBuf;
@@ -20,6 +22,9 @@ use std::ptr;
 pub use array::naive as array_naive;
 pub use array::{naive_table, sais_table};
 pub use array2::sais_table as sais_table2;
+pub use array2::sais as sais2;
+pub use array3::sais_table as sais_table3;
+pub use array4::sais_table as sais_table4;
 
 #[derive(Eq, PartialEq)]
 pub struct SuffixArray<'s> {
@@ -49,7 +54,7 @@ impl<'s> SuffixArray<'s> {
     }
 }
 
-impl<'s> fmt::Show for SuffixArray<'s> {
+impl<'s> fmt::Debug for SuffixArray<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(writeln!(f, "\n-----------------------------------------"));
         try!(writeln!(f, "SUFFIX ARRAY"));
@@ -216,7 +221,7 @@ impl<T> Rawlink<T> {
     }
 }
 
-impl<'s> fmt::Show for SuffixTree<'s> {
+impl<'s> fmt::Debug for SuffixTree<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fn fmt<'s>(f: &mut fmt::Formatter, st: &SuffixTree<'s>,
                    node: &Node, depth: usize) -> fmt::Result {
@@ -239,7 +244,7 @@ impl<'s> fmt::Show for SuffixTree<'s> {
     }
 }
 
-impl fmt::Show for Node {
+impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Node {{ start: {}, end: {}, len(children): {}, \
                            terminals: {}, parent? {} }}",
@@ -357,4 +362,6 @@ impl<'t> Iterator for SuffixIndices<'t> {
 
 mod array;
 mod array2;
+mod array3;
+mod array4;
 mod to_suffix_tree;

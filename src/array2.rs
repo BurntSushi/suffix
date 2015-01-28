@@ -8,6 +8,8 @@ use std::slice;
 use std::str::{self, CharRange};
 use std::u32;
 
+use stopwatch::Stopwatch;
+
 use SuffixArray;
 use self::SuffixType::{Ascending, Descending, Valley};
 
@@ -22,7 +24,7 @@ pub fn naive_table<'s>(s: &'s str) -> Vec<u32> {
 }
 
 fn make_suffix_array<'s>(s: &'s str, table: Vec<u32>) -> SuffixArray<'s> {
-    let mut inverse: Vec<u32> = repeat(0).take(table.len()).collect();
+    let mut inverse = vec_from_elem(table.len(), 0u32);
     for (rank, &sufstart) in table.iter().enumerate() {
         inverse[sufstart as usize] = rank as u32;
     }
@@ -43,7 +45,7 @@ fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
     // It does require the use of the inverse suffix array, which makes this
     // O(n) in space. The inverse suffix array gives us a special ordering
     // with which to compute the LCPs.
-    let mut lcps: Vec<_> = repeat(0).take(table.len()).collect();
+    let mut lcps = vec_from_elem(table.len(), 0u32);
     let mut len = 0u32;
     for (sufi2, &rank) in inv.iter().enumerate() {
         if rank == 0 {
@@ -66,7 +68,7 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
 
     // The first LCP is always 0 because of the definition:
     //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
-    let mut lcps: Vec<_> = repeat(0).take(table.len()).collect();
+    let mut lcps = vec_from_elem(table.len(), 0u32);
     for (i, win) in table.windows(2).enumerate() {
         lcps[i+1] = lcp_len(&text[win[0] as usize..],
                             &text[win[1] as usize..]);
@@ -77,6 +79,13 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
 /// Compute the length of the least common prefix between two strings.
 fn lcp_len(a: &str, b: &str) -> u32 {
     a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count() as u32
+}
+
+fn vec_from_elem<T: Copy>(len: usize, init: T) -> Vec<T> {
+    let mut vec: Vec<T> = Vec::with_capacity(len);
+    unsafe { vec.set_len(len); }
+    for v in vec.iter_mut() { *v = init; }
+    vec
 }
 
 pub fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
@@ -91,12 +100,7 @@ pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     }
 
     let chars = text.chars().count();
-    println!("Allocating suffix array of size {:?}", chars);
-    let mut sa: Vec<u32> = Vec::with_capacity(chars);
-    unsafe { sa.set_len(chars); }
-    for i in (0..chars) { sa[i] = 0; }
-    // let mut sa: Vec<u32> = repeat(0).take(chars).collect();
-    println!("done allocating suffix array");
+    let mut sa = vec_from_elem(chars, 0u32);
 
     let mut stypes = SuffixTypes::new(text.len() as u32);
     let mut bins = Bins::new();
@@ -108,8 +112,7 @@ pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
 fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
                bins: &mut Bins, text: &T)
         where T: Text,
-              <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
-              <<T as Text>::Chars as Iterator>::Item: Char {
+              <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
     match text.len() {
         0 => return,
         1 => { sa[0] = 0; return; }
@@ -119,40 +122,33 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
     for v in sa.iter_mut() { *v = 0; }
 
     stypes.compute(text);
-    bins.find_sizes(text.chars().map(|c| c.char()));
+    bins.find_sizes(text.char_indices().map(|c| c.idx_char().1));
     bins.find_tail_pointers();
 
     // Insert the valley suffixes.
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
         if stypes.is_valley(i as u32) {
-            bins.tail_insert(sa, i as u32, c as usize);
+            bins.tail_insert(sa, i as u32, c);
         }
     }
-    debug!("{{wstr}} after step 0: {:?}", sa);
-    println!("wstr step 0 complete");
 
     // Now find the start of each bin.
     bins.find_head_pointers();
-    println!("wstr step 1 half complete");
 
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
     if stypes.is_desc(lasti) {
-        bins.head_insert(sa, lasti, lastc as usize);
+        bins.head_insert(sa, lasti, lastc);
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            debug!("WSTR STEP 1: {:?}, {:?}", lasti, lastc);
             if stypes.is_desc(lasti) {
-                bins.head_insert(sa, lasti, lastc as usize);
+                bins.head_insert(sa, lasti, lastc);
             }
         }
     }
-
-    debug!("{{wstr}} after step 1: {:?}", sa);
-    println!("wstr step 1 complete");
 
     bins.find_tail_pointers();
 
@@ -162,13 +158,10 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
             if stypes.is_asc(lasti) {
-                bins.tail_insert(sa, lasti, lastc as usize);
+                bins.tail_insert(sa, lasti, lastc);
             }
         }
     }
-
-    debug!("{{wstr}} after step 2: {:?}", sa);
-    println!("wstr step 2 complete");
 
     let mut num_wstrs = 0u32;
     for i in 0..sa.len() {
@@ -188,45 +181,16 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
     // most n/2 wstrings, a name can never be greater than n/2.
     for i in (num_wstrs..(sa.len() as u32)) { sa[i as usize] = u32::MAX; }
     for i in (0..num_wstrs) {
-        let this_sufi = sa[i as usize];
-        let mut diff = false;
-        let mut thisi = this_sufi;
-        let mut previ = prev_sufi;
-        loop {
-            if thisi >= text.len() || previ >= text.len() {
-                // This means the next comparison *should* hit the sentinel,
-                // but we don't store the sentinel. The sentinel must never be
-                // equal to any other character, so we have a diff!
-                diff = true;
-                break;
-            }
-            let this_char = text.char_at(thisi);
-            let prev_char = text.char_at(previ);
-            if prev_sufi == 0
-                    || this_char != prev_char
-                    || !stypes.equal(thisi, previ) {
-                diff = true;
-                break;
-            }
-            if thisi > this_sufi && (stypes.is_valley(thisi)
-                                     || stypes.is_valley(previ)) {
-                break;
-            }
-            thisi = text.next(thisi).0;
-            previ = text.next(previ).0;
-        }
-        if diff {
+        let cur_sufi = sa[i as usize];
+        if prev_sufi == 0 || !text.wstring_equal(stypes, cur_sufi, prev_sufi) {
             name += 1;
-            prev_sufi = this_sufi;
+            prev_sufi = cur_sufi;
         }
         // This divide-by-2 trick only works because it's impossible to have
         // two wstrings start at adjacent locations (they must at least be
         // separated by a single descending character).
-        sa[(num_wstrs + (this_sufi / 2)) as usize] = name - 1;
+        sa[(num_wstrs + (cur_sufi / 2)) as usize] = name - 1;
     }
-
-    println!("{:?} lexical names found", name);
-    debug!("{:?} lexical names found", name);
 
     // We've inserted the lexical names into the latter half of the suffix
     // array, but it's sparse. so let's smush them all up to the end.
@@ -238,13 +202,10 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         }
     }
 
-    println!("built reduced string (size: {:?})", num_wstrs);
-    debug!("reduced: {:?}", &sa[sa.len() - (num_wstrs as usize) ..]);
-
     if name < num_wstrs {
         let split_at = sa.len() - (num_wstrs as usize);
         let (r_sa, r_text) = sa.split_at_mut(split_at);
-        sais_vec(r_sa.slice_to_mut(num_wstrs as usize), stypes, bins,
+        sais_vec(&mut r_sa[..num_wstrs as usize], stypes, bins,
                  &LexNames(r_text));
         stypes.compute(text);
     } else {
@@ -253,9 +214,6 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
             sa[reducedi as usize] = i;
         }
     }
-
-    debug!("reduced sa: {:?}", sa);
-    println!("SA of reduced string computed");
 
     let mut j = sa.len() as u32 - num_wstrs;
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
@@ -272,39 +230,33 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         sa[i as usize] = 0;
     }
 
-    bins.find_sizes(text.chars().map(|c| c.char()));
+    bins.find_sizes(text.char_indices().map(|c| c.idx_char().1));
     bins.find_tail_pointers();
 
     // Insert the valley suffixes.
     for i in (0..num_wstrs).rev() {
         let sufi = sa[i as usize];
         sa[i as usize] = 0;
-        bins.tail_insert(sa, sufi, text.char_at(sufi) as usize);
+        bins.tail_insert(sa, sufi, text.char_at(sufi));
     }
-    debug!("after step 0: {:?}", sa);
-    println!("step 0 complete (added {:?} suffixes)", num_wstrs);
 
     // Now find the start of each bin.
     bins.find_head_pointers();
-    println!("step 1 half complete");
 
     // Insert the descending suffixes.
     let (lasti, lastc) = text.prev(text.len());
     if stypes.is_desc(lasti) {
-        bins.head_insert(sa, lasti, lastc as usize);
+        bins.head_insert(sa, lasti, lastc);
     }
     for i in 0..sa.len() {
         let sufi = sa[i];
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
-            debug!("STEP 1: {:?}, {:?}", lasti, lastc);
             if stypes.is_desc(lasti) {
-                bins.head_insert(sa, lasti, lastc as usize);
+                bins.head_insert(sa, lasti, lastc);
             }
         }
     }
-    debug!("after step 1: {:?}", sa);
-    println!("step 1 complete");
 
     // ... and find the end of each bin again.
     bins.find_tail_pointers();
@@ -315,12 +267,10 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         if sufi > 0 {
             let (lasti, lastc) = text.prev(sufi);
             if stypes.is_asc(lasti) {
-                bins.tail_insert(sa, lasti, lastc as usize);
+                bins.tail_insert(sa, lasti, lastc);
             }
         }
     }
-    debug!("after step 2: {:?}", sa);
-    println!("step 2 complete");
 }
 
 struct SuffixTypes {
@@ -336,17 +286,13 @@ enum SuffixType {
 
 impl SuffixTypes {
     fn new(num_bytes: u32) -> SuffixTypes {
-        println!("allocating suffix types...");
         let mut stypes = Vec::with_capacity(num_bytes as usize);
         unsafe { stypes.set_len(num_bytes as usize); }
-        println!("...done allocating suffix types.");
         SuffixTypes { types: stypes }
     }
 
     fn compute<'a, T>(&mut self, text: &T)
             where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
-        println!("finding suffix types");
-
         let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
         self.types[(text.len() - 1) as usize] = Descending;
         let (mut lasti, mut lastc) = chars.next().unwrap();
@@ -364,26 +310,22 @@ impl SuffixTypes {
             lastc = c;
             lasti = i;
         }
-        // for (i, t) in self.types.iter().enumerate() {
-            // debug!("suffix type for ({:?}, {:?}): {:?}",
-                   // i, text.char_at(i as u32), t);
-        // }
     }
 
-    #[inline]
+    #[inline(always)]
     fn ty(&self, i: u32) -> SuffixType { self.types[i as usize] }
-    #[inline]
+    #[inline(always)]
     fn is_asc(&self, i: u32) -> bool { self.ty(i).is_asc() }
-    #[inline]
+    #[inline(always)]
     fn is_desc(&self, i: u32) -> bool { self.ty(i).is_desc() }
-    #[inline]
+    #[inline(always)]
     fn is_valley(&self, i: u32) -> bool { self.ty(i).is_valley() }
-    #[inline]
+    #[inline(always)]
     fn equal(&self, i: u32, j: u32) -> bool { self.ty(i) == self.ty(j) }
 }
 
 impl SuffixType {
-    #[inline]
+    #[inline(always)]
     fn is_asc(&self) -> bool {
         match *self {
             Ascending | Valley => true,
@@ -391,12 +333,12 @@ impl SuffixType {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn is_desc(&self) -> bool {
         if let Descending = *self { true } else { false }
     }
 
-    #[inline]
+    #[inline(always)]
     fn is_valley(&self) -> bool {
         if let Valley = *self { true } else { false }
     }
@@ -421,26 +363,18 @@ struct Bins {
     alphas: Vec<u32>,
     sizes: Vec<u32>,
     ptrs: Vec<u32>,
-    // ptrs: BTreeMap<u32, u32>,
 }
 
 impl Bins {
     fn new() -> Bins {
-        println!("Allocating bins...");
-        let b = Bins {
+        Bins {
             alphas: Vec::with_capacity(10_000),
             sizes: Vec::with_capacity(10_000),
-            ptrs: repeat(0).take(500_000).collect(),
-            // ptrs: BTreeMap::with_b(6),
-        };
-        println!("... done allocating bins.");
-        b
+            ptrs: Vec::new(), // re-allocated later, no worries
+        }
     }
 
     fn find_sizes<I>(&mut self, mut chars: I) where I: Iterator<Item=u32> {
-        // self.ptrs.clear();
-
-        println!("Find the size of each bin");
         unsafe { self.alphas.set_len(0); }
         for size in self.sizes.iter_mut() { *size = 0; }
         for c in chars {
@@ -450,13 +384,14 @@ impl Bins {
             }
         }
         self.alphas.sort();
-        println!("alphabet size: {:?}", self.alphas.len());
+
+        let ptrs_len = self.alphas[self.alphas.len() - 1] + 1;
+        self.ptrs = vec_from_elem(ptrs_len as usize, 0u32);
     }
 
     fn find_head_pointers(&mut self) {
         let mut sum = 0u32;
         for &c in self.alphas.iter() {
-            // self.ptrs.insert(c, sum);
             self.ptrs[c as usize] = sum;
             sum += self.size(c);
         }
@@ -467,35 +402,21 @@ impl Bins {
         for &c in self.alphas.iter() {
             sum += self.size(c);
             self.ptrs[c as usize] = sum - 1;
-            // self.ptrs.insert(c, sum - 1);
         }
     }
 
     #[inline(always)]
-    fn head_insert(&mut self, sa: &mut [u32], i: u32, c: usize) {
-        // let ptr = &mut self.ptrs[c];
-        // sa[*ptr as usize] = i;
-        // *ptr += 1;
-
-        unsafe {
-            sa[*self.ptrs.get_unchecked(c) as usize] = i;
-            *self.ptrs.get_unchecked_mut(c) += 1;
-        }
+    fn head_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
+        let ptr = &mut self.ptrs[c as usize];
+        sa[*ptr as usize] = i;
+        *ptr += 1;
     }
 
     #[inline(always)]
-    fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: usize) {
-        // let ptr = &mut self.ptrs[c];
-        // sa[*ptr as usize] = i;
-        // *ptr -= 1;
-
-        // sa[self.ptrs[c as usize] as usize] = i;
-        // self.ptrs[c as usize] -= 1;
-
-        unsafe {
-            sa[*self.ptrs.get_unchecked(c) as usize] = i;
-            *self.ptrs.get_unchecked_mut(c) -= 1;
-        }
+    fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
+        let ptr = &mut self.ptrs[c as usize];
+        sa[*ptr as usize] = i;
+        *ptr -= 1;
     }
 
     #[inline]
@@ -504,7 +425,7 @@ impl Bins {
             let (len, new_len) = (self.sizes.len(), 1 + (c as usize));
             self.sizes.reserve(new_len - len);
             unsafe { self.sizes.set_len(new_len); }
-            for v in self.sizes.slice_mut(len, new_len).iter_mut() { *v = 0; }
+            for v in self.sizes[len..new_len].iter_mut() { *v = 0; }
         }
         self.sizes[c as usize] += 1;
     }
@@ -521,11 +442,7 @@ trait Text {
     fn char_at(&self, i: u32) -> u32;
     fn chars(&self) -> Self::Chars;
     fn char_indices(&self) -> Self::IdxChars;
-    fn wstring_equal(&self, i: u32, j: u32) -> bool;
-
-    // For debugging. (This is why we aren't implementing slice syntax.)
-    fn _string_from(&self, start: u32) -> String;
-    fn _string(&self, start: u32, end: u32) -> String;
+    fn wstring_equal(&self, stypes: &SuffixTypes, w1: u32, w2: u32) -> bool;
 }
 
 struct Unicode<'s> {
@@ -573,14 +490,24 @@ impl<'s> Text for Unicode<'s> {
         self.s.char_indices()
     }
 
-    fn wstring_equal(&self, i: u32, j: u32) -> bool { true }
-
-    fn _string_from(&self, start: u32) -> String {
-        self.s[start as usize..].to_owned()
-    }
-
-    fn _string(&self, start: u32, end: u32) -> String {
-        self.s[start as usize .. end as usize].to_owned()
+    fn wstring_equal(&self, stypes: &SuffixTypes, w1: u32, w2: u32) -> bool {
+        let w1chars = self.s[w1 as usize..].char_indices();
+        let w2chars = self.s[w2 as usize..].char_indices();
+        for ((i1, c1), (i2, c2)) in w1chars.zip(w2chars) {
+            let (i1, i2) = (w1 + i1 as u32, w2 + i2 as u32);
+            if c1 != c2 || !stypes.equal(i1, i2) {
+                return false;
+            }
+            if i1 > w1 && (stypes.is_valley(i1) || stypes.is_valley(i2)) {
+                return true;
+            }
+        }
+        // At this point, we've exhausted either `w1` or `w2`, which means the
+        // next character for one of them should be the sentinel. Since
+        // `w1 != w2`, only one string can be exhausted. The sentinel is never
+        // equal to another character, so we can conclude that the wstrings
+        // are not equal.
+        false
     }
 }
 
@@ -610,14 +537,24 @@ impl<'s> Text for LexNames<'s> {
         self.0.iter().enumerate()
     }
 
-    fn wstring_equal(&self, i: u32, j: u32) -> bool { true }
-
-    fn _string_from(&self, start: u32) -> String {
-        format!("{:?}", &self.0[start as usize..])
-    }
-
-    fn _string(&self, start: u32, end: u32) -> String {
-        format!("{:?}", &self.0[start as usize .. end as usize])
+    fn wstring_equal(&self, stypes: &SuffixTypes, w1: u32, w2: u32) -> bool {
+        let w1chars = self.0[w1 as usize..].iter().enumerate();
+        let w2chars = self.0[w2 as usize..].iter().enumerate();
+        for ((i1, c1), (i2, c2)) in w1chars.zip(w2chars) {
+            let (i1, i2) = (w1 + i1 as u32, w2 + i2 as u32);
+            if c1 != c2 || !stypes.equal(i1, i2) {
+                return false;
+            }
+            if i1 > w1 && (stypes.is_valley(i1) || stypes.is_valley(i2)) {
+                return true;
+            }
+        }
+        // At this point, we've exhausted either `w1` or `w2`, which means the
+        // next character for one of them should be the sentinel. Since
+        // `w1 != w2`, only one string can be exhausted. The sentinel is never
+        // equal to another character, so we can conclude that the wstrings
+        // are not equal.
+        false
     }
 }
 
@@ -686,8 +623,8 @@ mod tests {
 
     #[test]
     fn array_scratch() {
-        let s = "tgtgtgtgcaccg";
-        // let s = "AGCTTTTCATTCT";
+        // let s = "tgtgtgtgcaccg";
+        let s = "AGCTTTTCATTCTGACTGCAACGGGCAATATGTCTCTGTGTGGATTAAAAA";
         // let s = "QQR";
         let sa = sais_table(s);
         // let sa = sais("32P32Pz");
