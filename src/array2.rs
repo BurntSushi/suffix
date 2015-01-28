@@ -8,8 +8,6 @@ use std::slice;
 use std::str::{self, CharRange};
 use std::u32;
 
-use stopwatch::Stopwatch;
-
 use SuffixArray;
 use self::SuffixType::{Ascending, Descending, Valley};
 

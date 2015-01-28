@@ -9,8 +9,6 @@
 
 #[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
-extern crate stopwatch;
-extern crate stats;
 
 use std::collections::btree_map::{self, BTreeMap};
 use std::collections::RingBuf;

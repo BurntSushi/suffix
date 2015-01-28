@@ -1,6 +1,6 @@
 [package]
 name = "suffix"
-version = "0.1.23"  #:version
+version = "0.1.24"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Suffix arrays and suffix trees."
 documentation = "http://burntsushi.net/rustdoc/suffix/"
@@ -30,8 +30,6 @@ debug = true
 rustc-serialize = "*"
 log = "*"
 docopt = "*"
-stopwatch = "*"
-streaming-stats = "*"
 
 [dev-dependencies]
 quickcheck = "*"
