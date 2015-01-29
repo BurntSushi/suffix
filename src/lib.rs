@@ -17,58 +17,8 @@ use std::iter::{self, AdditiveIterator};
 use std::mem;
 use std::ptr;
 
-pub use array::naive as array_naive;
-pub use array::{naive_table, sais_table};
-pub use array2::sais_table as sais_table2;
-pub use array2::sais as sais2;
-
-#[derive(Eq, PartialEq)]
-pub struct SuffixArray<'s> {
-    text: &'s str,
-    table: Vec<u32>,
-    inverse: Vec<u32>,
-    lcp_lens: Vec<u32>,
-}
-
-impl<'s> SuffixArray<'s> {
-    pub fn len(&self) -> u32 {
-        self.text.len() as u32
-    }
-
-    pub fn to_suffix_tree(&'s self) -> SuffixTree<'s> {
-        to_suffix_tree::to_suffix_tree(self)
-    }
-
-    pub fn suffix(&self, i: u32) -> &str {
-        &self.text[self.table[i as usize] as usize..]
-    }
-
-    pub fn lcp(&self, i: u32) -> &str {
-        let i = i as usize;
-        let sufi = self.table[i] as usize;
-        &self.text[sufi..sufi + (self.lcp_lens[i] as usize)]
-    }
-}
-
-impl<'s> fmt::Debug for SuffixArray<'s> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(writeln!(f, "\n-----------------------------------------"));
-        try!(writeln!(f, "SUFFIX ARRAY"));
-        try!(writeln!(f, "text: {}", self.text));
-        for (rank, &sufstart) in self.table.iter().enumerate() {
-            try!(writeln!(f, "suffix[{}] {}, {}",
-                          rank, sufstart, self.suffix(rank as u32)));
-        }
-        for (sufstart, &rank) in self.inverse.iter().enumerate() {
-            try!(writeln!(f, "inverse[{}] {}, {}",
-                          sufstart, rank, self.suffix(rank as u32)));
-        }
-        for (i, &len) in self.lcp_lens.iter().enumerate() {
-            try!(writeln!(f, "lcp_length[{}] {}", i, len));
-        }
-        writeln!(f, "-----------------------------------------")
-    }
-}
+pub use array::SuffixArray;
+pub use table::SuffixTable;
 
 pub struct SuffixTree<'s> {
     text: &'s str,
@@ -356,6 +306,13 @@ impl<'t> Iterator for SuffixIndices<'t> {
     }
 }
 
+fn vec_from_elem<T: Copy>(len: usize, init: T) -> Vec<T> {
+    let mut vec: Vec<T> = Vec::with_capacity(len);
+    unsafe { vec.set_len(len); }
+    for v in vec.iter_mut() { *v = init; }
+    vec
+}
+
 mod array;
-mod array2;
+mod table;
 mod to_suffix_tree;

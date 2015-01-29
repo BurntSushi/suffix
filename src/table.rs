@@ -1,3 +1,4 @@
+
 use std::borrow::ToOwned;
 use std::cmp::Ordering::{self, Equal, Greater, Less};
 use std::collections::btree_map::{BTreeMap, Entry};
@@ -8,109 +9,74 @@ use std::slice;
 use std::str::{self, CharRange};
 use std::u32;
 
-use SuffixArray;
+use {SuffixArray, vec_from_elem};
+
 use self::SuffixType::{Ascending, Descending, Valley};
 
-pub fn naive<'s>(s: &'s str) -> SuffixArray<'s> {
-    make_suffix_array(s, naive_table(s))
+#[derive(Clone, Eq, PartialEq)]
+pub struct SuffixTable<'s> {
+    text: &'s str,
+    table: Vec<u32>,
 }
 
-pub fn naive_table<'s>(s: &'s str) -> Vec<u32> {
-    let mut table: Vec<_> = s.char_indices().map(|(i, _)| i as u32).collect();
-    table.sort_by(|&a, &b| s[a as usize..].cmp(&s[b as usize..]));
+impl<'s> SuffixTable<'s> {
+    pub fn new(text: &'s str) -> SuffixTable<'s> {
+        SuffixTable {
+            text: text,
+            table: sais_table(text),
+        }
+    }
+
+    pub fn new_naive(text: &'s str) -> SuffixTable<'s> {
+        SuffixTable {
+            text: text,
+            table: naive_table(text),
+        }
+    }
+
+    pub fn into_suffix_array(self) -> SuffixArray<'s> {
+        SuffixArray::from_table(self)
+    }
+
+    pub fn table(&self) -> &[u32] { self.table.as_slice() }
+
+    pub fn text(&self) -> &'s str { self.text }
+
+    #[inline]
+    pub fn len(&self) -> usize { self.table.len() }
+
+    #[inline]
+    pub fn suffix(&self, i: usize) -> &str {
+        &self.text[self.table[i] as usize..]
+    }
+}
+
+fn naive_table(text: &str) -> Vec<u32> {
+    let mut table = Vec::with_capacity(text.len() / 2);
+    for (ci, _) in text.char_indices() { table.push(ci as u32); }
+    if table.len() > 0 {
+        assert!(table[table.len() - 1] <= u32::MAX);
+    }
+    table.sort_by(|&a, &b| text[a as usize..].cmp(&text[b as usize..]));
     table
 }
 
-fn make_suffix_array<'s>(s: &'s str, table: Vec<u32>) -> SuffixArray<'s> {
-    let mut inverse = vec_from_elem(table.len(), 0u32);
-    for (rank, &sufstart) in table.iter().enumerate() {
-        inverse[sufstart as usize] = rank as u32;
-    }
-    let lcp_lens = lcp_lens_linear(s, &*table, &*inverse);
-    SuffixArray {
-        text: s,
-        table: table,
-        inverse: inverse,
-        lcp_lens: lcp_lens,
-    }
-}
-
-fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
-    // This is a linear time construction algorithm taken from the first
-    // two slides of:
-    // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
-    //
-    // It does require the use of the inverse suffix array, which makes this
-    // O(n) in space. The inverse suffix array gives us a special ordering
-    // with which to compute the LCPs.
-    let mut lcps = vec_from_elem(table.len(), 0u32);
-    let mut len = 0u32;
-    for (sufi2, &rank) in inv.iter().enumerate() {
-        if rank == 0 {
-            continue
-        }
-        let sufi1 = table[(rank - 1) as usize];
-        len += lcp_len(&text[(sufi1 + len) as usize..],
-                       &text[(sufi2 as u32 + len) as usize..]);
-        lcps[rank as usize] = len;
-        if len > 0 {
-            len -= 1;
-        }
-    }
-    lcps
-}
-
-fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
-    // This is quadratic because there are N comparisons for each LCP.
-    // But it is done in constant space.
-
-    // The first LCP is always 0 because of the definition:
-    //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
-    let mut lcps = vec_from_elem(table.len(), 0u32);
-    for (i, win) in table.windows(2).enumerate() {
-        lcps[i+1] = lcp_len(&text[win[0] as usize..],
-                            &text[win[1] as usize..]);
-    }
-    lcps
-}
-
-/// Compute the length of the least common prefix between two strings.
-fn lcp_len(a: &str, b: &str) -> u32 {
-    a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count() as u32
-}
-
-fn vec_from_elem<T: Copy>(len: usize, init: T) -> Vec<T> {
-    let mut vec: Vec<T> = Vec::with_capacity(len);
-    unsafe { vec.set_len(len); }
-    for v in vec.iter_mut() { *v = init; }
-    vec
-}
-
-pub fn sais<'s>(text: &'s str) -> SuffixArray<'s> {
-    make_suffix_array(text, sais_table(text))
-}
-
 pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
-    match text.len() {
-        0 => return vec![],
-        1 => return vec![0],
-        _ => {},
-    }
-
     let chars = text.chars().count();
+    assert!(chars as u32 <= u32::MAX);
     let mut sa = vec_from_elem(chars, 0u32);
 
     let mut stypes = SuffixTypes::new(text.len() as u32);
     let mut bins = Bins::new();
 
-    sais_vec(&mut *sa, &mut stypes, &mut bins, &Unicode::from_str(text));
+    sais(&mut *sa, &mut stypes, &mut bins, &Unicode::from_str(text));
     sa
 }
 
-fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
-               bins: &mut Bins, text: &T)
-        where T: Text,
-              <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
+fn sais<T>(sa: &mut [u32], stypes: &mut SuffixTypes, bins: &mut Bins, text: &T)
+        where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
+    // Instead of working out edge cases in the code below, just allow them
+    // to assume >=2 characters.
     match text.len() {
         0 => return,
         1 => { sa[0] = 0; return; }
@@ -118,7 +84,6 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
     }
 
     for v in sa.iter_mut() { *v = 0; }
-
     stypes.compute(text);
     bins.find_sizes(text.char_indices().map(|c| c.idx_char().1));
     bins.find_tail_pointers();
@@ -148,6 +113,7 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         }
     }
 
+    // ... and the find the end of each bin.
     bins.find_tail_pointers();
 
     // Insert the ascending suffixes.
@@ -161,6 +127,7 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         }
     }
 
+    // Find and move all wstrings to the beinning of `sa`.
     let mut num_wstrs = 0u32;
     for i in 0..sa.len() {
         let sufi = sa[i];
@@ -200,11 +167,12 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         }
     }
 
+    // If we have fewer names than wstrings, then there are at least 2
+    // equivalent wstrings, which means we need to recurse and sort them.
     if name < num_wstrs {
         let split_at = sa.len() - (num_wstrs as usize);
         let (r_sa, r_text) = sa.split_at_mut(split_at);
-        sais_vec(&mut r_sa[..num_wstrs as usize], stypes, bins,
-                 &LexNames(r_text));
+        sais(&mut r_sa[..num_wstrs as usize], stypes, bins, &LexNames(r_text));
         stypes.compute(text);
     } else {
         for i in (0..num_wstrs) {
@@ -213,25 +181,35 @@ fn sais_vec<T>(sa: &mut [u32], stypes: &mut SuffixTypes,
         }
     }
 
-    let mut j = sa.len() as u32 - num_wstrs;
+    // Re-calibrate the bins by finding their sizes and the end of each bin.
+    bins.find_sizes(text.char_indices().map(|c| c.idx_char().1));
+    bins.find_tail_pointers();
+
+    // Replace the lexical names with their corresponding suffix index in the
+    // original text.
+    let mut j = sa.len() - (num_wstrs as usize);
     for (i, c) in text.char_indices().map(|v| v.idx_char()) {
         if stypes.is_valley(i as u32) {
-            sa[j as usize] = i as u32;
+            sa[j] = i as u32;
             j += 1;
         }
     }
+    // And now map the suffix indices from the reduced text to suffix
+    // indices in the original text. Remember, `sa[i]` yields a lexical name.
+    // So all we have to do is get the suffix index of the original text for
+    // that lexical name (which was made possible in the loop above).
+    //
+    // In other words, this sets the suffix indices of only the wstrings.
     for i in (0..num_wstrs) {
         let sufi = sa[i as usize];
         sa[i as usize] = sa[(sa.len() as u32 - num_wstrs + sufi) as usize];
     }
+    // Now zero out everything after the wstrs.
     for i in (num_wstrs..(sa.len() as u32)) {
         sa[i as usize] = 0;
     }
 
-    bins.find_sizes(text.char_indices().map(|c| c.idx_char().1));
-    bins.find_tail_pointers();
-
-    // Insert the valley suffixes.
+    // Insert the valley suffixes and zero out everything else..
     for i in (0..num_wstrs).rev() {
         let sufi = sa[i as usize];
         sa[i as usize] = 0;
@@ -292,8 +270,11 @@ impl SuffixTypes {
     fn compute<'a, T>(&mut self, text: &T)
             where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
         let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
-        self.types[(text.len() - 1) as usize] = Descending;
-        let (mut lasti, mut lastc) = chars.next().unwrap();
+        let (mut lasti, mut lastc) = match chars.next() {
+            None => return,
+            Some(t) => t,
+        };
+        self.types[lasti] = Descending;
         for (i, c) in chars {
             if c < lastc {
                 self.types[i] = Ascending;
@@ -310,20 +291,20 @@ impl SuffixTypes {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn ty(&self, i: u32) -> SuffixType { self.types[i as usize] }
-    #[inline(always)]
+    #[inline]
     fn is_asc(&self, i: u32) -> bool { self.ty(i).is_asc() }
-    #[inline(always)]
+    #[inline]
     fn is_desc(&self, i: u32) -> bool { self.ty(i).is_desc() }
-    #[inline(always)]
+    #[inline]
     fn is_valley(&self, i: u32) -> bool { self.ty(i).is_valley() }
-    #[inline(always)]
+    #[inline]
     fn equal(&self, i: u32, j: u32) -> bool { self.ty(i) == self.ty(j) }
 }
 
 impl SuffixType {
-    #[inline(always)]
+    #[inline]
     fn is_asc(&self) -> bool {
         match *self {
             Ascending | Valley => true,
@@ -331,12 +312,12 @@ impl SuffixType {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn is_desc(&self) -> bool {
         if let Descending = *self { true } else { false }
     }
 
-    #[inline(always)]
+    #[inline]
     fn is_valley(&self) -> bool {
         if let Valley = *self { true } else { false }
     }
@@ -403,14 +384,14 @@ impl Bins {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn head_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
         let ptr = &mut self.ptrs[c as usize];
         sa[*ptr as usize] = i;
         *ptr += 1;
     }
 
-    #[inline(always)]
+    #[inline]
     fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
         let ptr = &mut self.ptrs[c as usize];
         sa[*ptr as usize] = i;
@@ -428,17 +409,15 @@ impl Bins {
         self.sizes[c as usize] += 1;
     }
 
-    #[inline] fn size(&self, c: u32) -> u32 { self.sizes[c as usize] }
+    #[inline]
+    fn size(&self, c: u32) -> u32 { self.sizes[c as usize] }
 }
 
 trait Text {
-    type Chars: Iterator + DoubleEndedIterator;
     type IdxChars: Iterator + DoubleEndedIterator;
     fn len(&self) -> u32;
     fn prev(&self, i: u32) -> (u32, u32);
-    fn next(&self, i: u32) -> (u32, u32);
     fn char_at(&self, i: u32) -> u32;
-    fn chars(&self) -> Self::Chars;
     fn char_indices(&self) -> Self::IdxChars;
     fn wstring_equal(&self, stypes: &SuffixTypes, w1: u32, w2: u32) -> bool;
 }
@@ -459,7 +438,6 @@ impl<'s> Unicode<'s> {
 }
 
 impl<'s> Text for Unicode<'s> {
-    type Chars = str::Chars<'s>;
     type IdxChars = str::CharIndices<'s>;
 
     #[inline]
@@ -472,17 +450,7 @@ impl<'s> Text for Unicode<'s> {
     }
 
     #[inline]
-    fn next(&self, i: u32) -> (u32, u32) {
-        let CharRange { ch, next } = self.s.char_range_at(i as usize);
-        (next as u32, ch as u32)
-    }
-
-    #[inline]
     fn char_at(&self, i: u32) -> u32 { self.s.char_at(i as usize) as u32 }
-
-    fn chars(&self) -> str::Chars<'s> {
-        self.s.chars()
-    }
 
     fn char_indices(&self) -> str::CharIndices<'s> {
         self.s.char_indices()
@@ -512,7 +480,6 @@ impl<'s> Text for Unicode<'s> {
 struct LexNames<'s>(&'s [u32]);
 
 impl<'s> Text for LexNames<'s> {
-    type Chars = slice::Iter<'s, u32>;
     type IdxChars = iter::Enumerate<slice::Iter<'s, u32>>;
 
     #[inline]
@@ -522,14 +489,7 @@ impl<'s> Text for LexNames<'s> {
     fn prev(&self, i: u32) -> (u32, u32) { (i - 1, self.0[i as usize - 1]) }
 
     #[inline]
-    fn next(&self, i: u32) -> (u32, u32) { (i + 1, self.0[i as usize + 1]) }
-
-    #[inline]
     fn char_at(&self, i: u32) -> u32 { self.0[i as usize] }
-
-    fn chars(&self) -> slice::Iter<'s, u32> {
-        self.0.iter()
-    }
 
     fn char_indices(&self) -> iter::Enumerate<slice::Iter<'s, u32>> {
         self.0.iter().enumerate()
@@ -570,48 +530,41 @@ impl IdxChar for (usize, char) {
     fn idx_char(self) -> (usize, u32) { (self.0, self.1 as u32) }
 }
 
-trait Char {
-    fn char(self) -> u32;
-}
-
-impl<'a> Char for &'a u32 {
-    #[inline]
-    fn char(self) -> u32 { *self }
-}
-
-impl Char for char {
-    #[inline]
-    fn char(self) -> u32 { self as u32 }
-}
-
 #[cfg(test)]
 mod tests {
     extern crate test;
 
     use self::test::Bencher;
     use quickcheck::{TestResult, QuickCheck};
-    use super::{naive, naive_table, sais_table, sais};
+    use super::{SuffixTable, naive_table, sais_table};
 
     #[test]
     fn sais_basic1() {
-        assert_eq!(naive("apple"), sais("apple"));
+        assert_eq!(naive_table("apple"), sais_table("apple"));
     }
 
     #[test]
     fn sais_basic2() {
-        assert_eq!(naive("banana"), sais("banana"));
+        assert_eq!(naive_table("banana"), sais_table("banana"));
     }
 
     #[test]
     fn sais_basic3() {
-        assert_eq!(naive("mississippi"), sais("mississippi"));
+        assert_eq!(naive_table("mississippi"), sais_table("mississippi"));
+    }
+
+    #[test]
+    fn sais_basic4() {
+        assert_eq!(naive_table("tgtgtgtgcaccg"), sais_table("tgtgtgtgcaccg"));
     }
 
     #[test]
     fn qc_naive_equals_sais() {
         fn prop(s: String) -> TestResult {
             if s.is_empty() { return TestResult::discard(); }
-            TestResult::from_bool(naive(&*s) == sais(&*s))
+            let expected = SuffixTable::new_naive(&*s);
+            let got = SuffixTable::new(&*s);
+            TestResult::from_bool(expected == got)
         }
         QuickCheck::new()
             .tests(1000)
@@ -621,11 +574,8 @@ mod tests {
 
     #[test]
     fn array_scratch() {
-        // let s = "tgtgtgtgcaccg";
-        let s = "AGCTTTTCATTCTGACTGCAACGGGCAATATGTCTCTGTGTGGATTAAAAA";
-        // let s = "QQR";
+        let s = "tgtgtgtgcaccg";
         let sa = sais_table(s);
-        // let sa = sais("32P32Pz");
 
         debug!("\n\ngot suffix array:");
         for &i in sa.iter() {
@@ -635,43 +585,41 @@ mod tests {
         for &i in naive_table(&*s).iter() {
             debug!("{:2}: {}", i, &s[i as usize..]);
         }
-
-        // assert_eq!(sa, naive("32P32Pz"));
     }
 
-    // #[bench]
-    // fn naive_small(b: &mut Bencher) {
-        // let s = "mississippi";
-        // b.iter(|| { naive_table(s); })
-    // }
-//
-    // #[bench]
-    // fn sais_small(b: &mut Bencher) {
-        // let s = "mississippi";
-        // b.iter(|| { sais_table(s); })
-    // }
-//
-    // #[bench]
-    // fn naive_dna_small(b: &mut Bencher) {
-        // let s = include_str!("AP009048_10000.fasta");
-        // b.iter(|| { naive_table(s); })
-    // }
-//
-    // #[bench]
-    // fn sais_dna_small(b: &mut Bencher) {
-        // let s = include_str!("AP009048_10000.fasta");
-        // b.iter(|| { sais_table(s); })
-    // }
-//
-    // #[bench]
-    // fn naive_dna_medium(b: &mut Bencher) {
-        // let s = include_str!("AP009048_100000.fasta");
-        // b.iter(|| { naive_table(s); })
-    // }
-//
-    // #[bench]
-    // fn sais_dna_medium(b: &mut Bencher) {
-        // let s = include_str!("AP009048_100000.fasta");
-        // b.iter(|| { sais_table(s); })
-    // }
+    #[bench]
+    fn naive_small(b: &mut Bencher) {
+        let s = "mississippi";
+        b.iter(|| { naive_table(s); })
+    }
+
+    #[bench]
+    fn sais_small(b: &mut Bencher) {
+        let s = "mississippi";
+        b.iter(|| { sais_table(s); })
+    }
+
+    #[bench]
+    fn naive_dna_small(b: &mut Bencher) {
+        let s = include_str!("AP009048_10000.fasta");
+        b.iter(|| { naive_table(s); })
+    }
+
+    #[bench]
+    fn sais_dna_small(b: &mut Bencher) {
+        let s = include_str!("AP009048_10000.fasta");
+        b.iter(|| { sais_table(s); })
+    }
+
+    #[bench]
+    fn naive_dna_medium(b: &mut Bencher) {
+        let s = include_str!("AP009048_100000.fasta");
+        b.iter(|| { naive_table(s); })
+    }
+
+    #[bench]
+    fn sais_dna_medium(b: &mut Bencher) {
+        let s = include_str!("AP009048_100000.fasta");
+        b.iter(|| { sais_table(s); })
+    }
 }

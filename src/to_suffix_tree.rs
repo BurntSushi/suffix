@@ -1,10 +1,11 @@
-use {SuffixArray, SuffixTree, Node, Rawlink, array_naive};
+use {SuffixArray, SuffixTree, Node, Rawlink};
 
-pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
-    let mut st = SuffixTree::init(&*sa.text);
+pub fn to_suffix_tree<'s>(sa: &SuffixArray<'s>) -> SuffixTree<'s> {
+    let table = sa.table();
+    let mut st = SuffixTree::init(sa.text());
     let mut last: *mut Node = &mut *st.root;
-    for (i, &sufstart) in sa.table.iter().enumerate() {
-        let lcp_len = sa.lcp_lens[i];
+    for (i, &sufstart) in sa.table().iter().enumerate() {
+        let lcp_len = sa.lcp_len(i) as u32;
         let vins = ancestor_lcp_len(unsafe { &mut *last }, lcp_len);
         let dv = vins.path_len;
         if dv == lcp_len {
@@ -14,7 +15,7 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             // entirety of `vins`, which in turn means we can simply
             // add it as a new leaf.
             let mut node = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.len());
+                sufstart, sufstart + lcp_len, sa.len() as u32);
             node.add_parent(vins);
 
             let first_char = st.key(&*node);
@@ -55,20 +56,20 @@ pub fn to_suffix_tree<'a, 's>(sa: &'a SuffixArray<'s>) -> SuffixTree<'s> {
             let mut rnode = vins.children.remove(&rkey).unwrap();
 
             // 2) create new internal node (full path label == LCP)
-            let mut int_node = Node::internal(sa.table[i-1] + dv,
-                                              sa.table[i-1] + lcp_len);
+            let mut int_node = Node::internal(table[i-1] + dv,
+                                              table[i-1] + lcp_len);
             int_node.add_parent(vins);
 
             // 3) Attach old node to new internal node and update
             // the label.
-            rnode.start = sa.table[i-1] + lcp_len;
-            rnode.end = sa.table[i-1] + rnode.path_len;
+            rnode.start = table[i-1] + lcp_len;
+            rnode.end = table[i-1] + rnode.path_len;
             rnode.add_parent(&mut *int_node);
 
             // 4) Create new leaf node with the current suffix, but with
             // the lcp trimmed.
             let mut leaf = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.len());
+                sufstart, sufstart + lcp_len, sa.len() as u32);
             leaf.add_parent(&mut *int_node);
 
             // Update the last node we visited.
@@ -106,30 +107,30 @@ fn ancestor_lcp_len<'a>(start: &'a mut Node, lcp_len: u32) -> &'a mut Node {
 #[cfg(test)]
 mod tests {
     use quickcheck::quickcheck;
-    use {Node, array_naive};
+    use {Node, SuffixArray};
 
     #[test]
     fn basic() {
-        let sa = array_naive("banana");
+        let sa = SuffixArray::new_naive("banana");
         let st = sa.to_suffix_tree();
     }
 
     #[test]
     fn basic2() {
-        let sa = array_naive("apple");
+        let sa = SuffixArray::new_naive("apple");
         let st = sa.to_suffix_tree();
     }
 
     #[test]
     fn basic3() {
-        let sa = array_naive("mississippi");
+        let sa = SuffixArray::new_naive("mississippi");
         let st = sa.to_suffix_tree();
     }
 
     #[test]
     fn qc_n_leaves() {
         fn prop(s: String) -> bool {
-            let sa = array_naive(&*s);
+            let sa = SuffixArray::new_naive(&*s);
             let st = sa.to_suffix_tree();
             st.root.leaves().count() == s.len() + 1
         }
@@ -139,7 +140,7 @@ mod tests {
     #[test]
     fn qc_internals_have_at_least_two_children() {
         fn prop(s: String) -> bool {
-            let sa = array_naive(&*s);
+            let sa = SuffixArray::new_naive(&*s);
             let st = sa.to_suffix_tree();
             for node in st.root.preorder() {
                 if !node.has_terminals() && node.children.len() < 2 {
@@ -154,13 +155,13 @@ mod tests {
     #[test]
     fn qc_tree_enumerates_suffixes() {
         fn prop(s: String) -> bool {
-            // This is pretty much relying on `array_naive` to produce the
+            // This is pretty much relying on `SuffixArray::new_naive` to produce the
             // correct suffixes. But the nice thing about the naive algorithm
             // is that it's stupidly simple.
-            let sa = array_naive(&*s);
+            let sa = SuffixArray::new_naive(&*s);
             let st = sa.to_suffix_tree();
             for (i, sufi) in st.root.suffix_indices().enumerate() {
-                if &st.text[sufi as usize..] != sa.suffix(i as u32) {
+                if &st.text[sufi as usize..] != sa.suffix(i) {
                     return false;
                 }
             }
@@ -170,7 +171,7 @@ mod tests {
 
     #[test]
     fn scratch() {
-        let sa = array_naive("mississippi");
+        let sa = SuffixArray::new_naive("mississippi");
         let st = sa.to_suffix_tree();
         debug!("{:?}", st);
         // let node = st.root.children.get(&'a').unwrap()
