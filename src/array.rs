@@ -1,16 +1,7 @@
-use std::borrow::ToOwned;
-use std::cmp::Ordering::{self, Equal, Greater, Less};
-use std::collections::btree_map::{BTreeMap, Entry};
 use std::fmt;
-use std::iter::{self, repeat};
-use std::mem::transmute;
-use std::num::Int;
-use std::slice;
-use std::str::{self, CharRange};
-use std::u32;
 
 use {SuffixTable, SuffixTree, vec_from_elem};
-use to_suffix_tree::to_suffix_tree;
+use tree::to_suffix_tree;
 
 #[derive(Clone)]
 pub struct SuffixArray<'s> {
@@ -112,6 +103,7 @@ fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
     lcps
 }
 
+#[allow(dead_code)]
 fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
     // This is quadratic because there are N comparisons for each LCP.
     // But it is done in constant space.

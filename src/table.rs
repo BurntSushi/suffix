@@ -1,12 +1,6 @@
-
-use std::borrow::ToOwned;
-use std::cmp::Ordering::{self, Equal, Greater, Less};
-use std::collections::btree_map::{BTreeMap, Entry};
-use std::iter::{self, repeat};
-use std::mem::transmute;
-use std::num::Int;
+use std::iter;
 use std::slice;
-use std::str::{self, CharRange};
+use std::str;
 use std::u32;
 
 use {SuffixArray, vec_from_elem};
@@ -48,6 +42,18 @@ impl<'s> SuffixTable<'s> {
     #[inline]
     pub fn suffix(&self, i: usize) -> &str {
         &self.text[self.table[i] as usize..]
+    }
+}
+
+impl<'s> SuffixTable<'s> {
+    pub fn search(&self, query: &str) -> Vec<(usize, usize)> {
+        let start = self.table.binary_search_by(|&sufi| {
+            self.text[sufi as usize..].cmp(query)
+        });
+        match start {
+            Ok(s) => vec![(s, 0)],
+            Err(_) => vec![],
+        }
     }
 }
 
@@ -188,7 +194,7 @@ fn sais<T>(sa: &mut [u32], stypes: &mut SuffixTypes, bins: &mut Bins, text: &T)
     // Replace the lexical names with their corresponding suffix index in the
     // original text.
     let mut j = sa.len() - (num_wstrs as usize);
-    for (i, c) in text.char_indices().map(|v| v.idx_char()) {
+    for (i, _) in text.char_indices().map(|v| v.idx_char()) {
         if stypes.is_valley(i as u32) {
             sa[j] = i as u32;
             j += 1;
@@ -445,7 +451,8 @@ impl<'s> Text for Unicode<'s> {
 
     #[inline]
     fn prev(&self, i: u32) -> (u32, u32) {
-        let CharRange { ch, next } = self.s.char_range_at_reverse(i as usize);
+        let str::CharRange { ch, next } =
+            self.s.char_range_at_reverse(i as usize);
         (next as u32, ch as u32)
     }
 
@@ -532,9 +539,7 @@ impl IdxChar for (usize, char) {
 
 #[cfg(test)]
 mod tests {
-    extern crate test;
-
-    use self::test::Bencher;
+    use test::Bencher;
     use quickcheck::{TestResult, QuickCheck};
     use super::{SuffixTable, naive_table, sais_table};
 
@@ -575,16 +580,20 @@ mod tests {
     #[test]
     fn array_scratch() {
         let s = "tgtgtgtgcaccg";
-        let sa = sais_table(s);
+        // let sa = sais_table(s);
+//
+        // debug!("\n\ngot suffix array:");
+        // for &i in sa.iter() {
+            // debug!("{:2}: {}", i, &s[i as usize..]);
+        // }
+        // debug!("\n\nnaive suffix array:");
+        // for &i in naive_table(&*s).iter() {
+            // debug!("{:2}: {}", i, &s[i as usize..]);
+        // }
 
-        debug!("\n\ngot suffix array:");
-        for &i in sa.iter() {
-            debug!("{:2}: {}", i, &s[i as usize..]);
-        }
-        debug!("\n\nnaive suffix array:");
-        for &i in naive_table(&*s).iter() {
-            debug!("{:2}: {}", i, &s[i as usize..]);
-        }
+        let table = SuffixTable::new(s);
+        println!("SEARCH: {:?}", table.search("gca"));
+        // assert!(false);
     }
 
     #[bench]
