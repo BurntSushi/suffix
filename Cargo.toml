@@ -21,14 +21,23 @@ doc = false
 test = false
 bench = false
 
+[[test]]
+name = "tests"
+path = "tests/tests.rs"
+
+[[bench]]
+name = "bench"
+path = "tests/bench.rs"
+
 [profile.release]
-opt-level = 2
-debug = true
+opt-level = 3
 # lto = true
+
+[profile.bench]
+opt-level = 3
 
 [dependencies]
 rustc-serialize = "*"
-log = "*"
 docopt = "*"
 
 [dev-dependencies]

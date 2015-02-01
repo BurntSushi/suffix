@@ -5,11 +5,13 @@ use std::ptr;
 
 use SuffixArray;
 
+#[doc(hidden)]
 pub struct SuffixTree<'s> {
     text: &'s str,
     root: Box<Node>,
 }
 
+#[doc(hidden)]
 pub struct Node {
     parent: Rawlink<Node>,
     children: BTreeMap<char, Box<Node>>,
@@ -30,13 +32,6 @@ impl<'s> SuffixTree<'s> {
         SuffixTree {
             text: s,
             root: Node::leaf(0, 0, 0),
-        }
-    }
-
-    fn empty() -> SuffixTree<'static> {
-        SuffixTree {
-            text: "",
-            root: Node::internal(0, 0),
         }
     }
 
@@ -188,6 +183,7 @@ impl fmt::Debug for Node {
     }
 }
 
+#[doc(hidden)]
 pub struct Ancestors<'t> {
     cur: Option<&'t Node>,
 }
@@ -205,6 +201,7 @@ impl<'t> Iterator for Ancestors<'t> {
     }
 }
 
+#[doc(hidden)]
 pub struct Children<'t> {
     it: btree_map::Values<'t, char, Box<Node>>,
 }
@@ -229,6 +226,7 @@ impl<'t> DoubleEndedIterator for Children<'t> {
 
 impl<'t> ExactSizeIterator for Children<'t> {}
 
+#[doc(hidden)]
 pub struct Preorder<'t> {
     stack: Vec<&'t Node>,
 }
@@ -253,6 +251,7 @@ impl<'t> Iterator for Preorder<'t> {
     }
 }
 
+#[doc(hidden)]
 pub struct Leaves<'t> {
     it: Preorder<'t>,
 }
@@ -270,6 +269,7 @@ impl<'t> Iterator for Leaves<'t> {
     }
 }
 
+#[doc(hidden)]
 pub struct SuffixTreeIndices<'t> {
     it: Leaves<'t>,
     node: Option<&'t Node>,
@@ -459,10 +459,6 @@ mod tests {
             // algorithm is that it's stupidly simple.
             let sa = SuffixArray::new_naive(&*s);
             let st = sa.to_suffix_tree();
-            println!("{:?}", st);
-            for leaf in st.root.leaves() {
-                println!("LEAF: {:?}", leaf);
-            }
             for (i, sufi) in st.root.suffix_indices().enumerate() {
                 if &st.text[sufi as usize..] != sa.suffix(i) {
                     return false;
@@ -473,21 +469,21 @@ mod tests {
         quickcheck(prop as fn(String) -> bool);
     }
 
-    #[test]
-    fn scratch() {
-        let sa = SuffixArray::new_naive("mississippi");
-        let st = sa.to_suffix_tree();
-        debug!("{:?}", st);
+    // #[test]
+    // fn scratch() {
+        // let sa = SuffixArray::new_naive("mississippi");
+        // let st = sa.to_suffix_tree();
+        // debug!("{:?}", st);
         // let node = st.root.children.get(&'a').unwrap()
                           // .children.get(&'n').unwrap()
                           // .children.get(&'n').unwrap();
         // debug!("{}", st);
         // debug!("NODE: {}", node);
-        for n in st.root.leaves() {
-            debug!("{}", st.label(n));
-        }
+        // for n in st.root.leaves() {
+            // debug!("{}", st.label(n));
+        // }
         // for ancestor in node.ancestors().skip(1) {
             // debug!("ancestor: {}", st.label(ancestor));
         // }
-    }
+    // }
 }

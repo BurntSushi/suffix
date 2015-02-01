@@ -1,9 +1,11 @@
+use std::cmp;
+use std::fmt;
 use std::iter;
 use std::slice;
 use std::str;
 use std::u32;
 
-use {SuffixArray, vec_from_elem};
+use {SuffixArray, binary_search, vec_from_elem};
 
 use self::SuffixType::{Ascending, Descending, Valley};
 
@@ -21,6 +23,7 @@ impl<'s> SuffixTable<'s> {
         }
     }
 
+    #[doc(hidden)]
     pub fn new_naive(text: &'s str) -> SuffixTable<'s> {
         SuffixTable {
             text: text,
@@ -28,32 +31,81 @@ impl<'s> SuffixTable<'s> {
         }
     }
 
+    #[doc(hidden)]
     pub fn into_suffix_array(self) -> SuffixArray<'s> {
         SuffixArray::from_table(self)
     }
 
+    #[inline]
     pub fn table(&self) -> &[u32] { self.table.as_slice() }
 
+    #[inline]
     pub fn text(&self) -> &'s str { self.text }
 
     #[inline]
     pub fn len(&self) -> usize { self.table.len() }
 
     #[inline]
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
+
+    #[inline]
     pub fn suffix(&self, i: usize) -> &str {
         &self.text[self.table[i] as usize..]
     }
+
+    pub fn contains(&self, query: &str) -> bool {
+        query.len() > 0 && self.table.binary_search_by(|&sufi| {
+            let sufi = sufi as usize;
+            let len = cmp::min(query.len(), self.text.len() - sufi);
+            self.text[sufi..(sufi + len)].cmp(query)
+        }).is_ok()
+    }
+
+    pub fn positions(&self, query: &str) -> &[u32] {
+        // We can quickly decide whether the query won't match at all if
+        // it's outside the range of suffixes.
+        if self.len() == 0
+           || query.len() == 0
+           || (query < self.suffix(0) && !self.suffix(0).starts_with(query))
+           || query > self.suffix(self.len() - 1) {
+            return &[];
+        }
+
+        // The below is pretty close to the algorithm on Wikipedia:
+        //
+        //     http://en.wikipedia.org/wiki/Suffix_array#Applications
+        //
+        // The key difference is that after we find the start index, we look
+        // for the end by finding the first occurrence that doesn't start
+        // with `query`. That becomes our upper bound.
+        let start = binary_search(&*self.table,
+            |&sufi| query <= &self.text[sufi as usize..]);
+        // Hmm, we could inline this second binary search and start its
+        // "left" point with `start` from above. Probably not a huge difference
+        // in practice though. ---AG
+        let end = binary_search(&*self.table,
+            |&sufi| !self.text[sufi as usize..].starts_with(query));
+        // lg!("query: {:?}, start: {:?}, end: {:?}", query, start, end);
+
+        // Whoops. If start is somehow greater than end, then we've got
+        // nothing.
+        if start > end {
+            return &[];
+        }
+        &self.table[start..end]
+    }
 }
 
-impl<'s> SuffixTable<'s> {
-    pub fn search(&self, query: &str) -> Vec<(usize, usize)> {
-        let start = self.table.binary_search_by(|&sufi| {
-            self.text[sufi as usize..].cmp(query)
-        });
-        match start {
-            Ok(s) => vec![(s, 0)],
-            Err(_) => vec![],
+impl<'s> fmt::Debug for SuffixTable<'s> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(writeln!(f, "\n-----------------------------------------"));
+        try!(writeln!(f, "SUFFIX TABLE"));
+        try!(writeln!(f, "text: {}", self.text()));
+        for (rank, &sufstart) in self.table.iter().enumerate() {
+            try!(writeln!(f, "suffix[{}] {}, {}",
+                          rank, sufstart, self.suffix(rank)));
         }
+        writeln!(f, "-----------------------------------------")
     }
 }
 
@@ -67,7 +119,7 @@ fn naive_table(text: &str) -> Vec<u32> {
     table
 }
 
-pub fn sais_table<'s>(text: &'s str) -> Vec<u32> {
+fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     let chars = text.chars().count();
     assert!(chars as u32 <= u32::MAX);
     let mut sa = vec_from_elem(chars, 0u32);
@@ -537,98 +589,15 @@ impl IdxChar for (usize, char) {
     fn idx_char(self) -> (usize, u32) { (self.0, self.1 as u32) }
 }
 
-#[cfg(test)]
-mod tests {
-    use test::Bencher;
-    use quickcheck::{TestResult, QuickCheck};
-    use super::{SuffixTable, naive_table, sais_table};
-
-    #[test]
-    fn sais_basic1() {
-        assert_eq!(naive_table("apple"), sais_table("apple"));
-    }
-
-    #[test]
-    fn sais_basic2() {
-        assert_eq!(naive_table("banana"), sais_table("banana"));
-    }
-
-    #[test]
-    fn sais_basic3() {
-        assert_eq!(naive_table("mississippi"), sais_table("mississippi"));
-    }
-
-    #[test]
-    fn sais_basic4() {
-        assert_eq!(naive_table("tgtgtgtgcaccg"), sais_table("tgtgtgtgcaccg"));
-    }
-
-    #[test]
-    fn qc_naive_equals_sais() {
-        fn prop(s: String) -> TestResult {
-            if s.is_empty() { return TestResult::discard(); }
-            let expected = SuffixTable::new_naive(&*s);
-            let got = SuffixTable::new(&*s);
-            TestResult::from_bool(expected == got)
-        }
-        QuickCheck::new()
-            .tests(1000)
-            .max_tests(50000)
-            .quickcheck(prop as fn(String) -> TestResult);
-    }
-
-    #[test]
-    fn array_scratch() {
-        let s = "tgtgtgtgcaccg";
-        // let sa = sais_table(s);
+// #[cfg(test)]
+// mod tests {
+    // use super::SuffixTable;
 //
-        // debug!("\n\ngot suffix array:");
-        // for &i in sa.iter() {
-            // debug!("{:2}: {}", i, &s[i as usize..]);
-        // }
-        // debug!("\n\nnaive suffix array:");
-        // for &i in naive_table(&*s).iter() {
-            // debug!("{:2}: {}", i, &s[i as usize..]);
-        // }
-
-        let table = SuffixTable::new(s);
-        println!("SEARCH: {:?}", table.search("gca"));
-        // assert!(false);
-    }
-
-    #[bench]
-    fn naive_small(b: &mut Bencher) {
-        let s = "mississippi";
-        b.iter(|| { naive_table(s); })
-    }
-
-    #[bench]
-    fn sais_small(b: &mut Bencher) {
-        let s = "mississippi";
-        b.iter(|| { sais_table(s); })
-    }
-
-    #[bench]
-    fn naive_dna_small(b: &mut Bencher) {
-        let s = include_str!("AP009048_10000.fasta");
-        b.iter(|| { naive_table(s); })
-    }
-
-    #[bench]
-    fn sais_dna_small(b: &mut Bencher) {
-        let s = include_str!("AP009048_10000.fasta");
-        b.iter(|| { sais_table(s); })
-    }
-
-    #[bench]
-    fn naive_dna_medium(b: &mut Bencher) {
-        let s = include_str!("AP009048_100000.fasta");
-        b.iter(|| { naive_table(s); })
-    }
-
-    #[bench]
-    fn sais_dna_medium(b: &mut Bencher) {
-        let s = include_str!("AP009048_100000.fasta");
-        b.iter(|| { sais_table(s); })
-    }
-}
+    // #[test]
+    // fn array_scratch() {
+        // let s = "tgtgtgtgcaccg";
+        // let table = SuffixTable::new(s);
+        // lg!("{:?}", table);
+        // lg!("SEARCH: {:?}", table.positions("gtg"));
+    // }
+// }

@@ -3,6 +3,7 @@ use std::fmt;
 use {SuffixTable, SuffixTree, vec_from_elem};
 use tree::to_suffix_tree;
 
+#[doc(hidden)]
 #[derive(Clone)]
 pub struct SuffixArray<'s> {
     table: SuffixTable<'s>,
