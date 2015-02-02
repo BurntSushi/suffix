@@ -295,7 +295,7 @@ impl<'t> Iterator for SuffixTreeIndices<'t> {
     }
 }
 
-pub fn to_suffix_tree<'s>(sa: &SuffixArray<'s>) -> SuffixTree<'s> {
+pub fn to_suffix_tree<'s>(sa: &'s SuffixArray<'s>) -> SuffixTree<'s> {
     fn ancestor_lcp_len<'a>(start: &'a mut Node, lcplen: u32) -> &'a mut Node {
         // Is it worth making a mutable `Ancestors` iterator?
         // If this is the only place that needs it, probably not. ---AG

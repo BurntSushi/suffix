@@ -33,13 +33,13 @@ impl<'s> SuffixArray<'s> {
         }
     }
 
-    pub fn to_suffix_tree(&self) -> SuffixTree<'s> {
+    pub fn to_suffix_tree(&'s self) -> SuffixTree<'s> {
         to_suffix_tree(self)
     }
 
     pub fn table(&self) -> &[u32] { self.table.table() }
 
-    pub fn text(&self) -> &'s str { self.table.text() }
+    pub fn text(&self) -> &str { self.table.text() }
 
     #[inline]
     pub fn len(&self) -> usize { self.table.len() }

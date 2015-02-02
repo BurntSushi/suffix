@@ -1,8 +1,10 @@
+use std::borrow::IntoCow;
 use std::cmp;
 use std::fmt;
 use std::iter;
 use std::slice;
 use std::str;
+use std::string::CowString;
 use std::u32;
 
 use {SuffixArray, binary_search, vec_from_elem};
@@ -11,23 +13,29 @@ use self::SuffixType::{Ascending, Descending, Valley};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct SuffixTable<'s> {
-    text: &'s str,
+    text: CowString<'s>,
     table: Vec<u32>,
 }
 
 impl<'s> SuffixTable<'s> {
-    pub fn new(text: &'s str) -> SuffixTable<'s> {
+    pub fn new<S>(text: S) -> SuffixTable<'s>
+            where S: IntoCow<'s, String, str> {
+        let text = text.into_cow();
+        let table = sais_table(&*text);
         SuffixTable {
             text: text,
-            table: sais_table(text),
+            table: table,
         }
     }
 
     #[doc(hidden)]
-    pub fn new_naive(text: &'s str) -> SuffixTable<'s> {
+    pub fn new_naive<S>(text: S) -> SuffixTable<'s>
+            where S: IntoCow<'s, String, str> {
+        let text = text.into_cow();
+        let table = naive_table(&*text);
         SuffixTable {
             text: text,
-            table: naive_table(text),
+            table: table,
         }
     }
 
@@ -40,7 +48,7 @@ impl<'s> SuffixTable<'s> {
     pub fn table(&self) -> &[u32] { self.table.as_slice() }
 
     #[inline]
-    pub fn text(&self) -> &'s str { self.text }
+    pub fn text(&self) -> &str { &*self.text }
 
     #[inline]
     pub fn len(&self) -> usize { self.table.len() }
@@ -311,7 +319,7 @@ struct SuffixTypes {
     types: Vec<SuffixType>,
 }
 
-#[derive(Clone, Copy, Eq, Show)]
+#[derive(Copy, Debug, Eq)]
 enum SuffixType {
     Ascending,
     Descending,
