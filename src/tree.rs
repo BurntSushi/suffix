@@ -313,10 +313,6 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixArray<'s>) -> SuffixTree<'s> {
         cur
     }
 
-    // if sa.len() == 0 {
-        // return SuffixTree::empty();
-    // }
-
     let table = sa.table();
     let mut st = SuffixTree::init(sa.text());
     let mut last: *mut Node = &mut *st.root;
