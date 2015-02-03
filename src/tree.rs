@@ -260,7 +260,7 @@ impl<'t> Iterator for Leaves<'t> {
     type Item = &'t Node;
 
     fn next(&mut self) -> Option<&'t Node> {
-        for n in self.it {
+        for n in self.it.by_ref() {
             if n.len() > 0 && n.has_terminals() {
                 return Some(n);
             }

@@ -419,7 +419,7 @@ impl Bins {
         }
     }
 
-    fn find_sizes<I>(&mut self, mut chars: I) where I: Iterator<Item=u32> {
+    fn find_sizes<I>(&mut self, chars: I) where I: Iterator<Item=u32> {
         unsafe { self.alphas.set_len(0); }
         for size in self.sizes.iter_mut() { *size = 0; }
         for c in chars {
