@@ -119,17 +119,17 @@ impl<'s> fmt::Debug for SuffixTable<'s> {
 
 fn naive_table(text: &str) -> Vec<u32> {
     let mut table = Vec::with_capacity(text.len() / 2);
-    for (ci, _) in text.char_indices() { table.push(ci as u32); }
-    if table.len() > 0 {
-        assert!(table[table.len() - 1] <= u32::MAX);
-    }
+    let mut count = 0us;
+    for (ci, _) in text.char_indices() { table.push(ci as u32); count += 1; }
+    assert!(count <= u32::MAX as usize);
+
     table.sort_by(|&a, &b| text[a as usize..].cmp(&text[b as usize..]));
     table
 }
 
 fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     let chars = text.chars().count();
-    assert!(chars as u32 <= u32::MAX);
+    assert!(chars <= u32::MAX as usize);
     let mut sa = vec_from_elem(chars, 0u32);
 
     let mut stypes = SuffixTypes::new(text.len() as u32);
