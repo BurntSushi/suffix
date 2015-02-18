@@ -3,15 +3,13 @@ use std::fmt;
 use std::iter;
 use std::ptr;
 
-use SuffixArray;
+use SuffixTable;
 
-#[doc(hidden)]
 pub struct SuffixTree<'s> {
     text: &'s str,
     root: Box<Node>,
 }
 
-#[doc(hidden)]
 pub struct Node {
     parent: Rawlink<Node>,
     children: BTreeMap<char, Box<Node>>,
@@ -40,7 +38,7 @@ impl<'s> SuffixTree<'s> {
     }
 
     pub fn root(&self) -> &Node {
-        &*self.root
+        &self.root
     }
 
     pub fn label(&self, node: &Node) -> &'s str {
@@ -183,7 +181,6 @@ impl fmt::Debug for Node {
     }
 }
 
-#[doc(hidden)]
 pub struct Ancestors<'t> {
     cur: Option<&'t Node>,
 }
@@ -201,7 +198,6 @@ impl<'t> Iterator for Ancestors<'t> {
     }
 }
 
-#[doc(hidden)]
 pub struct Children<'t> {
     it: btree_map::Values<'t, char, Box<Node>>,
 }
@@ -226,7 +222,6 @@ impl<'t> DoubleEndedIterator for Children<'t> {
 
 impl<'t> ExactSizeIterator for Children<'t> {}
 
-#[doc(hidden)]
 pub struct Preorder<'t> {
     stack: Vec<&'t Node>,
 }
@@ -251,7 +246,6 @@ impl<'t> Iterator for Preorder<'t> {
     }
 }
 
-#[doc(hidden)]
 pub struct Leaves<'t> {
     it: Preorder<'t>,
 }
@@ -269,7 +263,6 @@ impl<'t> Iterator for Leaves<'t> {
     }
 }
 
-#[doc(hidden)]
 pub struct SuffixTreeIndices<'t> {
     it: Leaves<'t>,
     node: Option<&'t Node>,
@@ -295,7 +288,7 @@ impl<'t> Iterator for SuffixTreeIndices<'t> {
     }
 }
 
-pub fn to_suffix_tree<'s>(sa: &'s SuffixArray<'s>) -> SuffixTree<'s> {
+pub fn to_suffix_tree<'s>(sa: &'s SuffixTable<'s>) -> SuffixTree<'s> {
     fn ancestor_lcp_len<'a>(start: &'a mut Node, lcplen: u32) -> &'a mut Node {
         // Is it worth making a mutable `Ancestors` iterator?
         // If this is the only place that needs it, probably not. ---AG
@@ -314,10 +307,11 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixArray<'s>) -> SuffixTree<'s> {
     }
 
     let table = sa.table();
+    let lcp_lens = sa.lcp_lens();
     let mut st = SuffixTree::init(sa.text());
     let mut last: *mut Node = &mut *st.root;
     for (i, &sufstart) in sa.table().iter().enumerate() {
-        let lcp_len = sa.lcp_len(i) as u32;
+        let lcp_len = lcp_lens[i];
         let vins = ancestor_lcp_len(unsafe { &mut *last }, lcp_len);
         let dv = vins.path_len;
         if dv == lcp_len {
@@ -330,7 +324,7 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixArray<'s>) -> SuffixTree<'s> {
                 sufstart, sufstart + lcp_len, sa.len() as u32);
             node.add_parent(vins);
 
-            let first_char = st.key(&*node);
+            let first_char = st.key(&node);
             // TODO: I don't yet understand why this invariant is true,
             // but it has to be---otherwise the algorithm is flawed. ---AG
             assert!(!vins.children.contains_key(&first_char));
@@ -388,10 +382,10 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixArray<'s>) -> SuffixTree<'s> {
             last = &mut *leaf;
 
             // Finally, attach all of the nodes together.
-            assert!(st.key(&*rnode) != st.key(&*leaf)); // why? ---AG
-            int_node.children.insert(st.key(&*rnode), rnode);
-            int_node.children.insert(st.key(&*leaf), leaf);
-            vins.children.insert(st.key(&*int_node), int_node);
+            assert!(st.key(&rnode) != st.key(&leaf)); // why? ---AG
+            int_node.children.insert(st.key(&rnode), rnode);
+            int_node.children.insert(st.key(&leaf), leaf);
+            vins.children.insert(st.key(&int_node), int_node);
         } else {
             unreachable!()
         }
@@ -402,30 +396,30 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixArray<'s>) -> SuffixTree<'s> {
 #[cfg(test)]
 mod tests {
     use quickcheck::quickcheck;
-    use SuffixArray;
+    use SuffixTable;
 
     #[test]
     fn basic() {
-        let sa = SuffixArray::new_naive("banana");
+        let sa = SuffixTable::new_naive("banana");
         let _ = sa.to_suffix_tree();
     }
 
     #[test]
     fn basic2() {
-        let sa = SuffixArray::new_naive("apple");
+        let sa = SuffixTable::new_naive("apple");
         let _ = sa.to_suffix_tree();
     }
 
     #[test]
     fn basic3() {
-        let sa = SuffixArray::new_naive("mississippi");
+        let sa = SuffixTable::new_naive("mississippi");
         let _ = sa.to_suffix_tree();
     }
 
     #[test]
     fn qc_n_leaves() {
         fn prop(s: String) -> bool {
-            let sa = SuffixArray::new_naive(&*s);
+            let sa = SuffixTable::new_naive(&*s);
             let st = sa.to_suffix_tree();
             st.root.leaves().count() == s.len()
         }
@@ -435,7 +429,7 @@ mod tests {
     #[test]
     fn qc_internals_have_at_least_two_children() {
         fn prop(s: String) -> bool {
-            let sa = SuffixArray::new_naive(&*s);
+            let sa = SuffixTable::new_naive(&*s);
             let st = sa.to_suffix_tree();
             for node in st.root.preorder() {
                 if !node.has_terminals() && node.children.len() < 2 {
@@ -450,10 +444,10 @@ mod tests {
     #[test]
     fn qc_tree_enumerates_suffixes() {
         fn prop(s: String) -> bool {
-            // This is pretty much relying on `SuffixArray::new_naive` to
+            // This is pretty much relying on `SuffixTable::new_naive` to
             // produce the correct suffixes. But the nice thing about the naive
             // algorithm is that it's stupidly simple.
-            let sa = SuffixArray::new_naive(&*s);
+            let sa = SuffixTable::new_naive(&*s);
             let st = sa.to_suffix_tree();
             for (i, sufi) in st.root.suffix_indices().enumerate() {
                 if &st.text[sufi as usize..] != sa.suffix(i) {
@@ -467,7 +461,7 @@ mod tests {
 
     // #[test]
     // fn scratch() {
-        // let sa = SuffixArray::new_naive("mississippi");
+        // let sa = SuffixTable::new_naive("mississippi");
         // let st = sa.to_suffix_tree();
         // debug!("{:?}", st);
         // let node = st.root.children.get(&'a').unwrap()

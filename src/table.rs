@@ -7,10 +7,20 @@ use std::str;
 use std::string::CowString;
 use std::u32;
 
-use {SuffixArray, binary_search, vec_from_elem};
+use {SuffixArray, SuffixTree, binary_search, vec_from_elem};
+use tree::to_suffix_tree;
 
 use self::SuffixType::{Ascending, Descending, Valley};
 
+/// A suffix table is an array of lexicographically sorted suffixes.
+///
+/// The lifetime `'s` refers to the text when borrowed.
+///
+/// This is distinct from a suffix array in that it *only* contains
+/// suffix indices. It has no "enhanced" information like the inverse suffix
+/// table or least-common-prefix lengths (LCP array). This representation
+/// limits what you can do (and how fast), but it uses very little memory
+/// (4 bytes per character in the text).
 #[derive(Clone, Eq, PartialEq)]
 pub struct SuffixTable<'s> {
     text: CowString<'s>,
@@ -18,49 +28,115 @@ pub struct SuffixTable<'s> {
 }
 
 impl<'s> SuffixTable<'s> {
+    /// Creates a new suffix table for `text` in `O(n)` time.
+    ///
+    /// The table stores either `S` or a `&S` and a lexicographically sorted
+    /// list of suffixes. Each suffix is represented by a 32 bit integer and
+    /// is a **byte index** into `text`.
+    ///
+    /// This means that `text` cannot contain more than `2^32 - 1` bytes.
     pub fn new<S>(text: S) -> SuffixTable<'s>
             where S: IntoCow<'s, String, str> {
         let text = text.into_cow();
-        let table = sais_table(&*text);
+        let table = sais_table(&text);
         SuffixTable {
             text: text,
             table: table,
         }
     }
 
+    /// The same as `new`, except it runs in `O(n^2 * logn)` time.
+    ///
+    /// This is a simple naive implementation that sorts the suffixes. This
+    /// tends to have lower overhead, so it can be useful when creating lots
+    /// of suffix tables for small strings.
     #[doc(hidden)]
     pub fn new_naive<S>(text: S) -> SuffixTable<'s>
             where S: IntoCow<'s, String, str> {
         let text = text.into_cow();
-        let table = naive_table(&*text);
+        let table = naive_table(&text);
         SuffixTable {
             text: text,
             table: table,
         }
     }
 
+    /// Creates a new suffix table from an existing list of lexicographically
+    /// sorted suffix indices.
+    ///
+    /// Note that the invariant that `table` must be a suffix table of `text`
+    /// is not checked! If it isn't, this will cause other operations on a
+    /// suffix table to fail in weird ways.
+    ///
+    /// Note that if `table` is borrowed (i.e., a `&[u8]`), then it is copied.
+    ///
+    /// This fails if the number of characters in `text` does not equal the
+    /// number of suffixes in `table`.
+    pub fn from_parts<'t, S, T>(text: S, table: T) -> SuffixTable<'s>
+            where S: IntoCow<'s, String, str>,
+                  T: IntoCow<'t, Vec<u32>, [u32]> {
+        let (text, table) = (text.into_cow(), table.into_cow());
+        assert_eq!(text.chars().count(), table.len());
+        SuffixTable {
+            text: text,
+            table: table.into_owned(),
+        }
+    }
+
+    /// Converts this suffix table to an enhanced suffix array.
+    ///
+    /// Not ready yet.
     #[doc(hidden)]
     pub fn into_suffix_array(self) -> SuffixArray<'s> {
         SuffixArray::from_table(self)
     }
 
+    /// Creates a suffix tree in linear time.
+    pub fn to_suffix_tree(&'s self) -> SuffixTree<'s> {
+        to_suffix_tree(self)
+    }
+
+    /// Computes the LCP array in linear time and linear space.
+    pub fn lcp_lens(&self) -> Vec<u32> {
+        let mut inverse = vec_from_elem(self.len(), 0u32);
+        for (rank, &sufstart) in self.table().iter().enumerate() {
+            inverse[sufstart as usize] = rank as u32;
+        }
+        lcp_lens_linear(self.text(), self.table(), &inverse)
+    }
+
+    /// Return the suffix table.
     #[inline]
     pub fn table(&self) -> &[u32] { self.table.as_slice() }
 
+    /// Return the text.
     #[inline]
-    pub fn text(&self) -> &str { &*self.text }
+    pub fn text(&self) -> &str { &self.text }
 
+    /// Returns the number of suffixes in the table.
+    ///
+    /// Alternatively, this is the number of characters in the text.
     #[inline]
     pub fn len(&self) -> usize { self.table.len() }
 
+    /// Returns `true` iff `self.len() == 0`.
     #[inline]
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 
+    /// Returns the suffix at index `i`.
     #[inline]
     pub fn suffix(&self, i: usize) -> &str {
         &self.text[self.table[i] as usize..]
     }
 
+    /// Returns true if and only if `query` is in text.
+    ///
+    /// This runs in `O(mlogn)` time, where `m == query.len()` and
+    /// `n == self.len()`. (As far as this author knows, this is the best known
+    /// bound for a plain suffix table.)
+    ///
+    /// You should prefer this over `positions` when you only need to test
+    /// existence (because it is faster).
     pub fn contains(&self, query: &str) -> bool {
         query.len() > 0 && self.table.binary_search_by(|&sufi| {
             let sufi = sufi as usize;
@@ -69,6 +145,16 @@ impl<'s> SuffixTable<'s> {
         }).is_ok()
     }
 
+    /// Returns an unordered list of positions where `query` starts in `text`.
+    ///
+    /// This runs in `O(mlogn)` time, where `m == query.len()` and
+    /// `n == self.len()`. (As far as this author knows, this is the best known
+    /// bound for a plain suffix table.)
+    ///
+    /// Positions are byte indices into `text`.
+    ///
+    /// If you just need to test existence, then use `contains` since it is
+    /// faster.
     pub fn positions(&self, query: &str) -> &[u32] {
         // We can quickly decide whether the query won't match at all if
         // it's outside the range of suffixes.
@@ -86,12 +172,12 @@ impl<'s> SuffixTable<'s> {
         // The key difference is that after we find the start index, we look
         // for the end by finding the first occurrence that doesn't start
         // with `query`. That becomes our upper bound.
-        let start = binary_search(&*self.table,
+        let start = binary_search(&self.table,
             |&sufi| query <= &self.text[sufi as usize..]);
         // Hmm, we could inline this second binary search and start its
         // "left" point with `start` from above. Probably not a huge difference
         // in practice though. ---AG
-        let end = binary_search(&*self.table,
+        let end = binary_search(&self.table,
             |&sufi| !self.text[sufi as usize..].starts_with(query));
         // lg!("query: {:?}, start: {:?}, end: {:?}", query, start, end);
 
@@ -115,6 +201,50 @@ impl<'s> fmt::Debug for SuffixTable<'s> {
         }
         writeln!(f, "-----------------------------------------")
     }
+}
+
+fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
+    // This is a linear time construction algorithm taken from the first
+    // two slides of:
+    // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
+    //
+    // It does require the use of the inverse suffix array, which makes this
+    // O(n) in space. The inverse suffix array gives us a special ordering
+    // with which to compute the LCPs.
+    let mut lcps = vec_from_elem(table.len(), 0u32);
+    let mut len = 0u32;
+    for (sufi2, &rank) in inv.iter().enumerate() {
+        if rank == 0 {
+            continue
+        }
+        let sufi1 = table[(rank - 1) as usize];
+        len += lcp_len(&text[(sufi1 + len) as usize..],
+                       &text[(sufi2 as u32 + len) as usize..]);
+        lcps[rank as usize] = len;
+        if len > 0 {
+            len -= 1;
+        }
+    }
+    lcps
+}
+
+#[allow(dead_code)]
+fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
+    // This is quadratic because there are N comparisons for each LCP.
+    // But it is done in constant space.
+
+    // The first LCP is always 0 because of the definition:
+    //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
+    let mut lcps = vec_from_elem(table.len(), 0u32);
+    for (i, win) in table.windows(2).enumerate() {
+        lcps[i+1] =
+            lcp_len(&text[win[0] as usize..], &text[win[1] as usize..]);
+    }
+    lcps
+}
+
+fn lcp_len(a: &str, b: &str) -> u32 {
+    a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count() as u32
 }
 
 fn naive_table(text: &str) -> Vec<u32> {
