@@ -1,0 +1,28 @@
+[package]
+name = "suffix_cmd"
+version = "0.1.32"  #:version
+authors = ["Andrew Gallant <jamslam@gmail.com>"]
+description = "Command line tool for searching with suffix arrays and suffix trees."
+homepage = "https://github.com/BurntSushi/suffix"
+repository = "https://github.com/BurntSushi/suffix"
+readme = "README.md"
+keywords = ["suffix", "text", "search", "index"]
+license = "Unlicense"
+
+[[bin]]
+name = "suffix"
+path = "src/main.rs"
+doc = false
+test = false
+bench = false
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[dependencies]
+docopt = "*"
+rustc-serialize = "*"
+
+[dependencies.suffix]
+path = ".."
