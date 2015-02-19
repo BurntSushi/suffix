@@ -5,7 +5,7 @@ authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Command line tool for searching with suffix arrays and suffix trees."
 homepage = "https://github.com/BurntSushi/suffix"
 repository = "https://github.com/BurntSushi/suffix"
-readme = "README.md"
+readme = "../README.md"
 keywords = ["suffix", "text", "search", "index"]
 license = "Unlicense"
 
@@ -22,7 +22,7 @@ lto = true
 
 [dependencies]
 docopt = "*"
-rustc-serialize = "*"
+rustc-serialize = "=0.2.13"
 
 [dependencies.suffix]
 path = ".."
