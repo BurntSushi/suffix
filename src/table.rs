@@ -137,6 +137,17 @@ impl<'s> SuffixTable<'s> {
     ///
     /// You should prefer this over `positions` when you only need to test
     /// existence (because it is faster).
+    ///
+    /// # Example
+    ///
+    /// Build a suffix array of some text and test existence of a substring:
+    ///
+    /// ```rust
+    /// use suffix::SuffixTable;
+    ///
+    /// let sa = SuffixTable::new("The quick brown fox.");
+    /// assert!(sa.contains("quick"));
+    /// ```
     pub fn contains(&self, query: &str) -> bool {
         query.len() > 0 && self.table.binary_search_by(|&sufi| {
             let sufi = sufi as usize;
@@ -155,6 +166,18 @@ impl<'s> SuffixTable<'s> {
     ///
     /// If you just need to test existence, then use `contains` since it is
     /// faster.
+    ///
+    /// # Example
+    ///
+    /// Build a suffix array of some text and find all occurrences of a
+    /// substring:
+    ///
+    /// ```rust
+    /// use suffix::SuffixTable;
+    ///
+    /// let sa = SuffixTable::new("The quick brown fox was very quick.");
+    /// assert_eq!(sa.positions("quick"), vec![4, 29]);
+    /// ```
     pub fn positions(&self, query: &str) -> &[u32] {
         // We can quickly decide whether the query won't match at all if
         // it's outside the range of suffixes.
@@ -174,10 +197,7 @@ impl<'s> SuffixTable<'s> {
         // with `query`. That becomes our upper bound.
         let start = binary_search(&self.table,
             |&sufi| query <= &self.text[sufi as usize..]);
-        // Hmm, we could inline this second binary search and start its
-        // "left" point with `start` from above. Probably not a huge difference
-        // in practice though. ---AG
-        let end = binary_search(&self.table,
+        let end = start + binary_search(&self.table[start..],
             |&sufi| !self.text[sufi as usize..].starts_with(query));
         // lg!("query: {:?}, start: {:?}, end: {:?}", query, start, end);
 

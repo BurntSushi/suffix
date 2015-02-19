@@ -169,3 +169,9 @@ fn query_longer_greater() {
     assert_eq!(sa.positions("mnomnomnomnomnomnomno"), vec![]);
     assert!(!sa.contains("mnomnomnomnomnomnomno"));
 }
+
+#[test]
+fn query_spaces() {
+    let sa = sais("The quick brown fox was very quick.");
+    assert_eq!(sa.positions("quick"), vec![4, 29]);
+}
