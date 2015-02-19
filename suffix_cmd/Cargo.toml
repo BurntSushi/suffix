@@ -26,3 +26,4 @@ rustc-serialize = "*"
 
 [dependencies.suffix]
 path = ".."
+version = "*"
