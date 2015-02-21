@@ -1,10 +1,9 @@
-use std::borrow::IntoCow;
+use std::borrow::{Cow, IntoCow};
 use std::cmp;
 use std::fmt;
 use std::iter;
 use std::slice;
 use std::str;
-use std::string::CowString;
 use std::u32;
 
 use {SuffixArray, SuffixTree, binary_search, vec_from_elem};
@@ -23,7 +22,7 @@ use self::SuffixType::{Ascending, Descending, Valley};
 /// (4 bytes per character in the text).
 #[derive(Clone, Eq, PartialEq)]
 pub struct SuffixTable<'s> {
-    text: CowString<'s>,
+    text: Cow<'s, str>,
     table: Vec<u32>,
 }
 
@@ -35,8 +34,7 @@ impl<'s> SuffixTable<'s> {
     /// is a **byte index** into `text`.
     ///
     /// This means that `text` cannot contain more than `2^32 - 1` bytes.
-    pub fn new<S>(text: S) -> SuffixTable<'s>
-            where S: IntoCow<'s, String, str> {
+    pub fn new<S>(text: S) -> SuffixTable<'s> where S: IntoCow<'s, str> {
         let text = text.into_cow();
         let table = sais_table(&text);
         SuffixTable {
@@ -51,8 +49,7 @@ impl<'s> SuffixTable<'s> {
     /// tends to have lower overhead, so it can be useful when creating lots
     /// of suffix tables for small strings.
     #[doc(hidden)]
-    pub fn new_naive<S>(text: S) -> SuffixTable<'s>
-            where S: IntoCow<'s, String, str> {
+    pub fn new_naive<S>(text: S) -> SuffixTable<'s> where S: IntoCow<'s, str> {
         let text = text.into_cow();
         let table = naive_table(&text);
         SuffixTable {
@@ -73,8 +70,7 @@ impl<'s> SuffixTable<'s> {
     /// This fails if the number of characters in `text` does not equal the
     /// number of suffixes in `table`.
     pub fn from_parts<'t, S, T>(text: S, table: T) -> SuffixTable<'s>
-            where S: IntoCow<'s, String, str>,
-                  T: IntoCow<'t, Vec<u32>, [u32]> {
+            where S: IntoCow<'s, str>, T: IntoCow<'t, [u32]> {
         let (text, table) = (text.into_cow(), table.into_cow());
         assert_eq!(text.chars().count(), table.len());
         SuffixTable {
@@ -269,7 +265,7 @@ fn lcp_len(a: &str, b: &str) -> u32 {
 
 fn naive_table(text: &str) -> Vec<u32> {
     let mut table = Vec::with_capacity(text.len() / 2);
-    let mut count = 0us;
+    let mut count = 0usize;
     for (ci, _) in text.char_indices() { table.push(ci as u32); count += 1; }
     assert!(count <= u32::MAX as usize);
 
