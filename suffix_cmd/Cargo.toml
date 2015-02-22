@@ -1,6 +1,6 @@
 [package]
 name = "suffix_cmd"
-version = "0.1.33"  #:version
+version = "0.1.35"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Command line tool for searching with suffix arrays and suffix trees."
 homepage = "https://github.com/BurntSushi/suffix"
@@ -21,12 +21,13 @@ opt-level = 3
 lto = true
 
 [dependencies]
+cbor = "*"
 docopt = "*"
 rustc-serialize = "*"
 
-[dependencies.cbor]
-path = "/home/andrew/data/projects/rust/cbor"
-version = "*"
+# [dependencies.cbor]
+# path = "/home/andrew/data/projects/rust/cbor"
+# version = "*"
 
 [dependencies.suffix]
 path = ".."
