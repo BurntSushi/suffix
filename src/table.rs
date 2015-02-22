@@ -6,12 +6,13 @@ use std::slice;
 use std::str;
 use std::u32;
 
-use {SuffixArray, SuffixTree, binary_search, vec_from_elem};
+use {SuffixTree, binary_search, vec_from_elem};
+use array::SuffixArray;
 use tree::to_suffix_tree;
 
 use self::SuffixType::{Ascending, Descending, Valley};
 
-/// A suffix table is an array of lexicographically sorted suffixes.
+/// A suffix table is a sequence of lexicographically sorted suffixes.
 ///
 /// The lifetime `'s` refers to the text when borrowed.
 ///
@@ -20,6 +21,40 @@ use self::SuffixType::{Ascending, Descending, Valley};
 /// table or least-common-prefix lengths (LCP array). This representation
 /// limits what you can do (and how fast), but it uses very little memory
 /// (4 bytes per character in the text).
+///
+/// # Construction
+///
+/// Suffix array construction is done in `O(n)` time and in `O(kn)` space,
+/// where `k` is the number of unique characters in the text. (More details
+/// below.) The specific algorithm implemented is from
+/// [(Nong et al., 2009)](https://local.ugene.unipro.ru/tracker/secure/attachment/12144/Linear%20Suffix%20Array%20Construction%20by%20Almost%20Pure%20Induced-Sorting.pdf),
+/// but I actually used the description found in
+/// [(Shrestha et al., 2014)](http://bib.oxfordjournals.org/content/15/2/138.full.pdf),
+/// because it is much more accessible to someone who is not used to reading
+/// algorithms papers.
+///
+/// The main thrust of the algorithm is that of "reduce and conquer." Namely,
+/// it reduces the problem of finding lexicographically sorted suffixes to a
+/// smaller subproblem, and solves it recursively. The subproblem is to find
+/// the suffix array of a smaller string, where that string is composed by
+/// naming contiguous regions of the original text. If there are any duplicate
+/// names, then the algorithm procedes recursively. If there are no duplicate
+/// names (base case), then the suffix array of the subproblem is already
+/// computed. In essence, this "inductively sorts" suffixes of the original
+/// text with several linear scans over the text. Because of the number of
+/// linear scans, the performance of construction is heavily tied to cache
+/// performance (and this is why `u32` is used to represent the suffix index
+/// instead of a `u64`).
+///
+/// The space usage is roughly `6` bytes per character. (The optimal bound is
+/// `5` bytes per character, although that may be for a small constant
+/// alphabet.) `4` bytes comes from the suffix array itself. The extra `2`
+/// bytes comes from storing the suffix type of each character (`1` byte) and
+/// information about bin boundaries, where the number of bins is equal to
+/// the number of unique characters in the text. This doesn't formally imply
+/// another byte of overhead, but in practice, the alphabet can get quite large
+/// when solving the subproblems mentioned above (even if the alphabet of the
+/// original text is very small).
 #[derive(Clone, Eq, PartialEq)]
 pub struct SuffixTable<'s> {
     text: Cow<'s, str>,
@@ -27,13 +62,23 @@ pub struct SuffixTable<'s> {
 }
 
 impl<'s> SuffixTable<'s> {
-    /// Creates a new suffix table for `text` in `O(n)` time.
+    /// Creates a new suffix table for `text` in `O(n)` time and `O(kn)`
+    /// space, where `k` is the size of the alphabet in the text.
     ///
     /// The table stores either `S` or a `&S` and a lexicographically sorted
     /// list of suffixes. Each suffix is represented by a 32 bit integer and
     /// is a **byte index** into `text`.
     ///
-    /// This means that `text` cannot contain more than `2^32 - 1` bytes.
+    /// # Panics
+    ///
+    /// Panics if the `text` contains more than `2^32 - 1` bytes. This
+    /// restriction is mostly artificial; there's no fundamental reason why
+    /// suffix array construction algorithm can't use a `u64`. Nevertheless,
+    /// `u32` was chosen for performance reasons. The performance of the
+    /// construction algorithm is highly dependent on cache performance, which
+    /// is degraded with a bigger number type. `u32` strikes a nice balance; it
+    /// gets good performance while allowing most reasonably sized documents
+    /// (~4GB).
     pub fn new<S>(text: S) -> SuffixTable<'s> where S: IntoCow<'s, str> {
         let text = text.into_cow();
         let table = sais_table(&text);
@@ -87,7 +132,7 @@ impl<'s> SuffixTable<'s> {
         SuffixArray::from_table(self)
     }
 
-    /// Creates a suffix tree in linear time.
+    /// Creates a suffix tree in linear time and space.
     pub fn to_suffix_tree(&'s self) -> SuffixTree<'s> {
         to_suffix_tree(self)
     }
@@ -625,12 +670,29 @@ impl Bins {
     fn size(&self, c: u32) -> u32 { self.sizes[c as usize] }
 }
 
+/// Encapsulates iteration and indexing over text.
+///
+/// This enables us to expose a common interface between a `String` and
+/// a `Vec<u32>`. Specifically, a `Vec<u32>` is used for lexical renaming.
 trait Text {
+    /// An iterator over characters.
+    ///
+    /// Must be reversible.
     type IdxChars: Iterator + DoubleEndedIterator;
+
+    /// The length of the text.
     fn len(&self) -> u32;
+
+    /// The character previous to the byte index `i`.
     fn prev(&self, i: u32) -> (u32, u32);
+
+    /// The character at byte index `i`.
     fn char_at(&self, i: u32) -> u32;
+
+    /// An iterator over characters tagged with their byte offsets.
     fn char_indices(&self) -> Self::IdxChars;
+
+    /// Compare two strings at byte indices `w1` and `w2`.
     fn wstring_equal(&self, stypes: &SuffixTypes, w1: u32, w2: u32) -> bool;
 }
 
@@ -729,7 +791,9 @@ impl<'s> Text for LexNames<'s> {
     }
 }
 
+/// A trait for converting indexed characters into a uniform representation.
 trait IdxChar {
+    /// Convert `Self` to a `(usize, u32)`.
     fn idx_char(self) -> (usize, u32);
 }
 
@@ -742,16 +806,3 @@ impl IdxChar for (usize, char) {
     #[inline]
     fn idx_char(self) -> (usize, u32) { (self.0, self.1 as u32) }
 }
-
-// #[cfg(test)]
-// mod tests {
-    // use super::SuffixTable;
-//
-    // #[test]
-    // fn array_scratch() {
-        // let s = "tgtgtgtgcaccg";
-        // let table = SuffixTable::new(s);
-        // lg!("{:?}", table);
-        // lg!("SEARCH: {:?}", table.positions("gtg"));
-    // }
-// }

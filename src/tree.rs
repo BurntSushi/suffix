@@ -5,11 +5,19 @@ use std::ptr;
 
 use SuffixTable;
 
+/// A suffix tree.
+///
+/// Currently, most of the interesting operations are defined on the `Node`
+/// type, which can be retrieved from a `SuffixTree` via its `root` method.
+///
+/// In the future, those operations may be promoted directly to `SuffixTree`,
+/// in addition to searching for text.
 pub struct SuffixTree<'s> {
     text: &'s str,
     root: Box<Node>,
 }
 
+/// A node in a suffix tree.
 pub struct Node {
     parent: Rawlink<Node>,
     children: BTreeMap<char, Box<Node>>,
@@ -29,25 +37,23 @@ impl<'s> SuffixTree<'s> {
     fn init(s: &'s str) -> SuffixTree<'s> {
         SuffixTree {
             text: s,
-            root: Node::leaf(0, 0, 0),
+            root: Node::leaf(s.len() as u32, 0, 0),
         }
     }
 
+    /// Get the text that is indexed by this suffix tree.
     pub fn text(&self) -> &'s str {
         self.text
     }
 
+    /// Retrieve the root node.
     pub fn root(&self) -> &Node {
         &self.root
     }
 
+    /// Get the path label *into* `node`.
     pub fn label(&self, node: &Node) -> &'s str {
         &self.text[node.start as usize .. node.end as usize]
-    }
-
-    pub fn suffix(&self, node: &Node) -> &'s str {
-        assert!(node.suffixes.len() > 0);
-        &self.text[node.suffixes[0] as usize..]
     }
 
     fn key(&self, node: &Node) -> char {
@@ -56,32 +62,57 @@ impl<'s> SuffixTree<'s> {
 }
 
 impl Node {
+    /// An iterator over all children of this node.
     pub fn children<'t>(&'t self) -> Children<'t> {
         Children { it: self.children.values() }
     }
 
+    /// An iterator over all ancestors of this node.
+    ///
+    /// This includes the current node and the root node.
     pub fn ancestors<'t>(&'t self) -> Ancestors<'t> {
         Ancestors { cur: Some(self) }
     }
 
+    /// Traverse all children nodes in preorder.
+    ///
+    /// This is the same as lexicographically traversing nodes in the tree.
     pub fn preorder<'t>(&'t self) -> Preorder<'t> {
         Preorder::new(self)
     }
 
+    /// An iterator over all leaves below this node.
+    ///
+    /// A node is a leaf if and only if it has terminals. It may still have
+    /// children nodes. (This fact suggests this SuffixTree implementation
+    /// is bunk.)
     pub fn leaves<'t>(&'t self) -> Leaves<'t> {
         Leaves { it: self.preorder() }
     }
 
+    /// An iterator over all suffix indices.
     pub fn suffix_indices<'t>(&'t self) -> SuffixTreeIndices<'t> {
         SuffixTreeIndices { it: self.leaves(), node: None, cur_suffix: 0 }
     }
 
+    /// The size of the path label into this node.
     pub fn len(&self) -> u32 {
         self.end - self.start
     }
 
+    /// The depth of this node (number of ancestors, not including self).
     pub fn depth(&self) -> usize {
         self.ancestors().count() - 1
+    }
+
+    /// Returns true if and only if this node has some terminals.
+    pub fn has_terminals(&self) -> bool {
+        self.suffixes.len() > 0
+    }
+
+    /// Returns all terminal suffix indices.
+    pub fn suffixes(&self) -> &[u32] {
+        &self.suffixes
     }
 }
 
@@ -110,10 +141,6 @@ impl Node {
 
     fn parent(&self) -> Option<&Node> {
         self.parent.resolve()
-    }
-
-    fn has_terminals(&self) -> bool {
-        self.suffixes.len() > 0
     }
 
     fn is_root(&self) -> bool {
@@ -181,6 +208,9 @@ impl fmt::Debug for Node {
     }
 }
 
+/// An iterator over ancestors of a node.
+///
+/// `'t` is the lifetime of the suffix tree.
 pub struct Ancestors<'t> {
     cur: Option<&'t Node>,
 }
@@ -198,6 +228,9 @@ impl<'t> Iterator for Ancestors<'t> {
     }
 }
 
+/// An iterator over all children of a node.
+///
+/// `'t` is the lifetime of the suffix tree.
 pub struct Children<'t> {
     it: btree_map::Values<'t, char, Box<Node>>,
 }
@@ -222,6 +255,9 @@ impl<'t> DoubleEndedIterator for Children<'t> {
 
 impl<'t> ExactSizeIterator for Children<'t> {}
 
+/// An iterator over all children of a node in preorder.
+///
+/// `'t` is the lifetime of the suffix tree.
 pub struct Preorder<'t> {
     stack: Vec<&'t Node>,
 }
@@ -246,6 +282,11 @@ impl<'t> Iterator for Preorder<'t> {
     }
 }
 
+/// An iterator over all leaves of a node.
+///
+/// A leaf is any node that has terminals. It may still have children nodes.
+///
+/// `'t` is the lifetime of the suffix tree.
 pub struct Leaves<'t> {
     it: Preorder<'t>,
 }
@@ -263,6 +304,9 @@ impl<'t> Iterator for Leaves<'t> {
     }
 }
 
+/// An iterator over all suffix indices below a node.
+///
+/// `'t` is the lifetime of the suffix tree.
 pub struct SuffixTreeIndices<'t> {
     it: Leaves<'t>,
     node: Option<&'t Node>,
@@ -458,22 +502,4 @@ mod tests {
         }
         quickcheck(prop as fn(String) -> bool);
     }
-
-    // #[test]
-    // fn scratch() {
-        // let sa = SuffixTable::new_naive("mississippi");
-        // let st = sa.to_suffix_tree();
-        // debug!("{:?}", st);
-        // let node = st.root.children.get(&'a').unwrap()
-                          // .children.get(&'n').unwrap()
-                          // .children.get(&'n').unwrap();
-        // debug!("{}", st);
-        // debug!("NODE: {}", node);
-        // for n in st.root.leaves() {
-            // debug!("{}", st.label(n));
-        // }
-        // for ancestor in node.ancestors().skip(1) {
-            // debug!("ancestor: {}", st.label(ancestor));
-        // }
-    // }
 }
