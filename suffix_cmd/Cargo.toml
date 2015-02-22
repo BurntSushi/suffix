@@ -22,7 +22,11 @@ lto = true
 
 [dependencies]
 docopt = "*"
-rustc-serialize = "=0.2.13"
+rustc-serialize = "*"
+
+[dependencies.cbor]
+path = "/home/andrew/data/projects/rust/cbor"
+version = "*"
 
 [dependencies.suffix]
 path = ".."
