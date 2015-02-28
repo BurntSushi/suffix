@@ -1,4 +1,4 @@
-#![feature(test)]
+#![feature(old_io, test)]
 
 extern crate quickcheck;
 extern crate suffix;
@@ -11,8 +11,7 @@ use suffix::SuffixTable;
 // difficult to use in tests.
 macro_rules! lg {
     ($($arg:tt)*) => ({
-        let _ = ::std::old_io::stderr().write_str(&*format!($($arg)*));
-        let _ = ::std::old_io::stderr().write_str("\n");
+        let _ = writeln!(&mut ::std::old_io::stderr(), $($arg)*);
     });
 }
 
@@ -174,4 +173,11 @@ fn query_longer_greater() {
 fn query_spaces() {
     let sa = sais("The quick brown fox was very quick.");
     assert_eq!(sa.positions("quick"), vec![4, 29]);
+}
+
+#[test]
+fn unicode_snowman() {
+    let sa = sais("☃abc☃");
+    assert!(sa.contains("☃"));
+    assert_eq!(sa.positions("☃"), vec![6, 0]);
 }

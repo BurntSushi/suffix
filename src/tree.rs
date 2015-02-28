@@ -365,7 +365,7 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixTable<'s>) -> SuffixTree<'s> {
             // entirety of `vins`, which in turn means we can simply
             // add it as a new leaf.
             let mut node = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.len() as u32);
+                sufstart, sufstart + lcp_len, sa.text().len() as u32);
             node.add_parent(vins);
 
             let first_char = st.key(&node);
@@ -419,7 +419,7 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixTable<'s>) -> SuffixTree<'s> {
             // 4) Create new leaf node with the current suffix, but with
             // the lcp trimmed.
             let mut leaf = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.len() as u32);
+                sufstart, sufstart + lcp_len, sa.text().len() as u32);
             leaf.add_parent(&mut *int_node);
 
             // Update the last node we visited.

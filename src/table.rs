@@ -1,7 +1,6 @@
 use std::borrow::{Cow, IntoCow};
-use std::cmp;
 use std::fmt;
-use std::iter;
+use std::iter::{self, order, AdditiveIterator};
 use std::slice;
 use std::str;
 use std::u32;
@@ -139,11 +138,13 @@ impl<'s> SuffixTable<'s> {
 
     /// Computes the LCP array in linear time and linear space.
     pub fn lcp_lens(&self) -> Vec<u32> {
-        let mut inverse = vec_from_elem(self.len(), 0u32);
+        let mut inverse = vec_from_elem(self.text.len(), 0u32);
         for (rank, &sufstart) in self.table().iter().enumerate() {
             inverse[sufstart as usize] = rank as u32;
         }
-        lcp_lens_linear(self.text(), self.table(), &inverse)
+        lcp_lens_quadratic(self.text(), self.table())
+        // Broken on Unicode text for now. ---AG
+        // lcp_lens_linear(self.text(), self.table(), &inverse)
     }
 
     /// Return the suffix table.
@@ -190,10 +191,10 @@ impl<'s> SuffixTable<'s> {
     /// assert!(sa.contains("quick"));
     /// ```
     pub fn contains(&self, query: &str) -> bool {
-        query.len() > 0 && self.table.binary_search_by(|&sufi| {
-            let sufi = sufi as usize;
-            let len = cmp::min(query.len(), self.text.len() - sufi);
-            self.text[sufi..(sufi + len)].cmp(query)
+        let nquery = query.chars().count();
+        nquery > 0 && self.table.binary_search_by(|&sufi| {
+            order::cmp(self.text[sufi as usize..].chars().take(nquery),
+                       query.chars())
         }).is_ok()
     }
 
@@ -240,14 +241,14 @@ impl<'s> SuffixTable<'s> {
             |&sufi| query <= &self.text[sufi as usize..]);
         let end = start + binary_search(&self.table[start..],
             |&sufi| !self.text[sufi as usize..].starts_with(query));
-        // lg!("query: {:?}, start: {:?}, end: {:?}", query, start, end);
 
         // Whoops. If start is somehow greater than end, then we've got
         // nothing.
         if start > end {
-            return &[];
+            &[]
+        } else {
+            &self.table[start..end]
         }
-        &self.table[start..end]
     }
 }
 
@@ -264,7 +265,11 @@ impl<'s> fmt::Debug for SuffixTable<'s> {
     }
 }
 
+#[allow(dead_code)]
 fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
+    // This algorithm is bunk because it doesn't work on Unicode. See comment
+    // in the code below.
+
     // This is a linear time construction algorithm taken from the first
     // two slides of:
     // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
@@ -283,13 +288,17 @@ fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
                        &text[(sufi2 as u32 + len) as usize..]);
         lcps[rank as usize] = len;
         if len > 0 {
+            // This is an illegal move because `len` is derived from `text`,
+            // which is a Unicode string. Subtracting `1` here assumes every
+            // character is a single byte in UTF-8, which is obviously wrong.
+            // TODO: Figure out how to get LCP lengths in linear time on
+            // UTF-8 encoded strings.
             len -= 1;
         }
     }
     lcps
 }
 
-#[allow(dead_code)]
 fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
     // This is quadratic because there are N comparisons for each LCP.
     // But it is done in constant space.
@@ -305,7 +314,12 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
 }
 
 fn lcp_len(a: &str, b: &str) -> u32 {
-    a.chars().zip(b.chars()).take_while(|&(ca, cb)| ca == cb).count() as u32
+    use std::iter::AdditiveIterator;
+    a.chars()
+     .zip(b.chars())
+     .take_while(|&(ca, cb)| ca == cb)
+     .map(|(c, _)| c.len_utf8())
+     .sum() as u32
 }
 
 fn naive_table(text: &str) -> Vec<u32> {
