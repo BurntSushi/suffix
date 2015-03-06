@@ -1,4 +1,4 @@
-#![feature(env, old_io)]
+#![feature(exit_status, io)]
 
 extern crate docopt;
 extern crate "rustc-serialize" as rustc_serialize;
@@ -7,7 +7,7 @@ extern crate suffix;
 use std::env;
 use std::error;
 use std::fmt;
-use std::old_io as io;
+use std::io::{self, Write};
 
 use docopt::Docopt;
 use suffix::{SuffixTable, SuffixTree, Node};
@@ -15,10 +15,7 @@ use suffix::{SuffixTable, SuffixTree, Node};
 macro_rules! cerr { ($tt:tt) => (return Err(Error::Other(format!($tt)))); }
 
 macro_rules! lg {
-    ($($arg:tt)*) => ({
-        let _ = ::std::old_io::stderr().write_str(&*format!($($arg)*));
-        let _ = ::std::old_io::stderr().write_str("\n");
-    });
+    ($($arg:tt)*) => ({ writeln!(&mut io::stderr(), $($arg)*).unwrap(); });
 }
 
 static USAGE: &'static str = "
@@ -39,12 +36,12 @@ struct Args {
 type CliResult<T> = Result<T, Error>;
 
 enum Error {
-    Io(io::IoError),
+    Io(io::Error),
     Other(String),
 }
 
-impl error::FromError<io::IoError> for Error {
-    fn from_error(err: io::IoError) -> Error { Error::Io(err) }
+impl error::FromError<io::Error> for Error {
+    fn from_error(err: io::Error) -> Error { Error::Io(err) }
 }
 
 impl error::FromError<String> for Error {
@@ -65,7 +62,7 @@ fn main() {
                             .and_then(|d| d.decode())
                             .unwrap_or_else(|e| e.exit());
     if let Err(err) = args.run() {
-        io::stderr().write_str(&format!("{}", err)).unwrap();
+        write!(&mut io::stderr(), "{}", err).unwrap();
         env::set_exit_status(1);
     }
 }

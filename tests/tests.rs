@@ -1,10 +1,10 @@
-#![feature(old_io, test)]
+#![feature(collections, test)]
 
 extern crate quickcheck;
 extern crate suffix;
 extern crate test;
 
-use quickcheck::{QuickCheck, TestResult};
+use quickcheck::{QuickCheck, TestResult, Testable};
 use suffix::SuffixTable;
 
 // A trivial logging macro. No reason to pull in `log`, which has become
@@ -17,6 +17,10 @@ macro_rules! lg {
 
 fn sais(text: &str) -> SuffixTable { SuffixTable::new(text) }
 fn naive(text: &str) -> SuffixTable { SuffixTable::new_naive(text) }
+
+fn qc<T: Testable>(f: T) {
+    QuickCheck::new().tests(1000).max_tests(10000).quickcheck(f);
+}
 
 // These tests assume the correctness of the `naive` method of computing a
 // suffix array. (It's only a couple lines of code and probably difficult to
@@ -63,17 +67,25 @@ fn two_same_is_ok() {
 }
 
 #[test]
-fn qc_naive_equals_sais() {
+fn nul_is_ok() {
+    assert_eq!(naive("\x00"), sais("\x00"));
+}
+
+#[test]
+fn snowman_is_ok() {
+    assert_eq!(naive("☃abc☃"), sais("☃abc☃"));
+}
+
+// See if we can catch any corner cases we forgot about.
+#[test]
+fn prop_naive_equals_sais() {
     fn prop(s: String) -> TestResult {
         if s.is_empty() { return TestResult::discard(); }
         let expected = naive(&*s);
         let got = sais(&*s);
         TestResult::from_bool(expected == got)
     }
-    QuickCheck::new()
-        .tests(1000)
-        .max_tests(50000)
-        .quickcheck(prop as fn(String) -> TestResult);
+    qc(prop as fn(String) -> TestResult);
 }
 
 // Do some testing on substring search.
@@ -180,4 +192,26 @@ fn unicode_snowman() {
     let sa = sais("☃abc☃");
     assert!(sa.contains("☃"));
     assert_eq!(sa.positions("☃"), vec![6, 0]);
+}
+
+#[test]
+fn prop_contains() {
+    fn prop(s: String, c: u8) -> bool {
+        let c = (c as char).to_string();
+        s.contains(&c) == sais(&s).contains(&c)
+    }
+    qc(prop as fn(String, u8) -> bool);
+}
+
+#[test]
+fn prop_positions() {
+    fn prop(s: String, c: u8) -> bool {
+        let c = (c as char).to_string();
+        let expected: Vec<_> =
+            s.match_indices(&c).map(|(s, _)| s as u32).collect();
+        let mut got = sais(&s).positions(&c).to_vec();
+        got.sort();
+        expected == got
+    }
+    qc(prop as fn(String, u8) -> bool);
 }
