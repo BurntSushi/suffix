@@ -666,7 +666,9 @@ impl Bins {
     fn tail_insert(&mut self, sa: &mut [u32], i: u32, c: u32) {
         let ptr = &mut self.ptrs[c as usize];
         sa[*ptr as usize] = i;
-        *ptr -= 1;
+        if *ptr > 0 {
+            *ptr -= 1;
+        }
     }
 
     #[inline]
