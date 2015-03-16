@@ -52,8 +52,8 @@
 
 #![deny(missing_docs)]
 
-#![allow(unused_features)] // for `test`
-#![feature(collections, core, test)]
+#![cfg_attr(test, feature(test))]
+#![feature(collections, core)]
 
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate test;

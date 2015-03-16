@@ -123,6 +123,14 @@ impl<'s> SuffixTable<'s> {
         }
     }
 
+    /// Extract the parts of a suffix table.
+    ///
+    /// This is useful to avoid copying when the suffix table is part of an
+    /// intermediate computation.
+    pub fn into_parts(self) -> (Cow<'s, str>, Vec<u32>) {
+        (self.text, self.table)
+    }
+
     /// Converts this suffix table to an enhanced suffix array.
     ///
     /// Not ready yet.
@@ -149,7 +157,7 @@ impl<'s> SuffixTable<'s> {
 
     /// Return the suffix table.
     #[inline]
-    pub fn table(&self) -> &[u32] { self.table.as_slice() }
+    pub fn table(&self) -> &[u32] { &self.table }
 
     /// Return the text.
     #[inline]
@@ -735,13 +743,19 @@ impl<'s> Text for Unicode<'s> {
 
     #[inline]
     fn prev(&self, i: u32) -> (u32, u32) {
-        let str::CharRange { ch, next } =
+        let str::CharRange { ch: c, next: j } =
             self.s.char_range_at_reverse(i as usize);
-        (next as u32, ch as u32)
+        // This is slower, but "stable."
+        // let (j, c) = self.s[..i as usize].char_indices().rev().next().unwrap();
+        (j as u32, c as u32)
     }
 
     #[inline]
-    fn char_at(&self, i: u32) -> u32 { self.s.char_at(i as usize) as u32 }
+    fn char_at(&self, i: u32) -> u32 {
+        self.s.char_at(i as usize) as u32
+        // This seems slower, but "stable."
+        // self.s[i as usize..].chars().next().unwrap() as u32
+    }
 
     fn char_indices(&self) -> str::CharIndices<'s> {
         self.s.char_indices()
