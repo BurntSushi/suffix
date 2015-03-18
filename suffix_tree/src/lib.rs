@@ -1,9 +1,40 @@
+//! Suffix tree construction in linear time. Usage is very simple:
+//!
+//! ```rust
+//! use suffix_tree::SuffixTree;
+//!
+//! let tree = SuffixTree::new("banana");
+//! println!("{:?}", tree);
+//! ```
+//!
+//! There is a command line utility included in this repository called
+//! `stree` that will write a suffix tree in GraphViz's `dot` format. From
+//! there, it's very easy to visualize it:
+//!
+//! ```ignore
+//! stree "banana" | dot -Tpng > banana.png
+//! ```
+//!
+//! Note that while there are lots of iterators defined for suffix trees in
+//! this crate, there is no useful interface for searching text. Namely, suffix
+//! tree support is very experimental and my current implementation seems
+//! extremely wasteful and not well designed.
+//!
+//! The construction algorithm takes linear time and space. (It first builds
+//! a suffix array and converts that to a tree in linear time.)
+
+#![feature(collections, core)]
+
+extern crate suffix;
+#[cfg(test)] extern crate quickcheck;
+
+use std::borrow::{Cow, IntoCow, ToOwned};
 use std::collections::btree_map::{self, BTreeMap};
 use std::fmt;
 use std::iter;
 use std::ptr;
 
-use SuffixTable;
+use suffix::SuffixTable;
 
 /// A suffix tree.
 ///
@@ -13,7 +44,7 @@ use SuffixTable;
 /// In the future, those operations may be promoted directly to `SuffixTree`,
 /// in addition to searching for text.
 pub struct SuffixTree<'s> {
-    text: &'s str,
+    text: Cow<'s, str>,
     root: Box<Node>,
 }
 
@@ -34,16 +65,26 @@ struct Rawlink<T> {
 impl<T> Copy for Rawlink<T> {}
 
 impl<'s> SuffixTree<'s> {
-    fn init(s: &'s str) -> SuffixTree<'s> {
+    pub fn new<S>(text: S) -> SuffixTree<'s> where S: IntoCow<'s, str> {
+        SuffixTree::from_suffix_table(&SuffixTable::new(text))
+    }
+
+    pub fn from_suffix_table(sa: &SuffixTable) -> SuffixTree<'s> {
+        to_suffix_tree(sa)
+    }
+
+    fn init<S>(s: S) -> SuffixTree<'s> where S: IntoCow<'s, str> {
+        let s = s.into_cow();
+        let len = s.len();
         SuffixTree {
             text: s,
-            root: Node::leaf(s.len() as u32, 0, 0),
+            root: Node::leaf(len as u32, 0, 0),
         }
     }
 
     /// Get the text that is indexed by this suffix tree.
-    pub fn text(&self) -> &'s str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 
     /// Retrieve the root node.
@@ -52,7 +93,7 @@ impl<'s> SuffixTree<'s> {
     }
 
     /// Get the path label *into* `node`.
-    pub fn label(&self, node: &Node) -> &'s str {
+    pub fn label(&self, node: &Node) -> &str {
         &self.text[node.start as usize .. node.end as usize]
     }
 
@@ -332,7 +373,7 @@ impl<'t> Iterator for SuffixTreeIndices<'t> {
     }
 }
 
-pub fn to_suffix_tree<'s>(sa: &'s SuffixTable<'s>) -> SuffixTree<'s> {
+fn to_suffix_tree(sa: &SuffixTable) -> SuffixTree<'static> {
     fn ancestor_lcp_len<'a>(start: &'a mut Node, lcplen: u32) -> &'a mut Node {
         // Is it worth making a mutable `Ancestors` iterator?
         // If this is the only place that needs it, probably not. ---AG
@@ -352,7 +393,7 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixTable<'s>) -> SuffixTree<'s> {
 
     let table = sa.table();
     let lcp_lens = sa.lcp_lens();
-    let mut st = SuffixTree::init(sa.text());
+    let mut st = SuffixTree::init(sa.text().to_owned());
     let mut last: *mut Node = &mut *st.root;
     for (i, &sufstart) in sa.table().iter().enumerate() {
         let lcp_len = lcp_lens[i];
@@ -440,32 +481,28 @@ pub fn to_suffix_tree<'s>(sa: &'s SuffixTable<'s>) -> SuffixTree<'s> {
 #[cfg(test)]
 mod tests {
     use quickcheck::quickcheck;
-    use SuffixTable;
+    use suffix::SuffixTable;
+    use SuffixTree;
 
     #[test]
     fn basic() {
-        let sa = SuffixTable::new_naive("banana");
-        let _ = sa.to_suffix_tree();
+        SuffixTree::new("banana");
     }
 
     #[test]
     fn basic2() {
-        let sa = SuffixTable::new_naive("apple");
-        let _ = sa.to_suffix_tree();
+        SuffixTree::new("apple");
     }
 
     #[test]
     fn basic3() {
-        let sa = SuffixTable::new_naive("mississippi");
-        let _ = sa.to_suffix_tree();
+        SuffixTree::new("mississippi");
     }
 
     #[test]
     fn qc_n_leaves() {
         fn prop(s: String) -> bool {
-            let sa = SuffixTable::new_naive(&*s);
-            let st = sa.to_suffix_tree();
-            st.root.leaves().count() == s.len()
+            SuffixTree::new(&*s).root.leaves().count() == s.len()
         }
         quickcheck(prop as fn(String) -> bool);
     }
@@ -473,8 +510,7 @@ mod tests {
     #[test]
     fn qc_internals_have_at_least_two_children() {
         fn prop(s: String) -> bool {
-            let sa = SuffixTable::new_naive(&*s);
-            let st = sa.to_suffix_tree();
+            let st = SuffixTree::new(&*s);
             for node in st.root.preorder() {
                 if !node.has_terminals() && node.children.len() < 2 {
                     return false;
@@ -491,8 +527,8 @@ mod tests {
             // This is pretty much relying on `SuffixTable::new_naive` to
             // produce the correct suffixes. But the nice thing about the naive
             // algorithm is that it's stupidly simple.
-            let sa = SuffixTable::new_naive(&*s);
-            let st = sa.to_suffix_tree();
+            let sa = SuffixTable::new(&*s);
+            let st = SuffixTree::from_suffix_table(&sa);
             for (i, sufi) in st.root.suffix_indices().enumerate() {
                 if &st.text[sufi as usize..] != sa.suffix(i) {
                     return false;

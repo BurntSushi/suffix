@@ -1,29 +1,22 @@
 [package]
-name = "suffix"
-version = "0.2.4"  #:version
+name = "suffix_tree"
+version = "0.1.0"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
-description = "Suffix arrays."
+description = "Suffix trees."
 documentation = "http://burntsushi.net/rustdoc/suffix/"
 homepage = "https://github.com/BurntSushi/suffix"
 repository = "https://github.com/BurntSushi/suffix"
 readme = "README.md"
-keywords = ["suffix", "text", "search", "index"]
+keywords = ["suffix", "text", "search", "index", "tree"]
 license = "Unlicense"
 
 [lib]
-name = "suffix"
+name = "suffix_tree"
 path = "src/lib.rs"
 
-[[test]]
-name = "tests"
-path = "tests/tests.rs"
-
-[[bench]]
-name = "bench"
-path = "tests/bench.rs"
-
-[profile.bench]
-opt-level = 3
+[dependencies.suffix]
+path = ".."
+version = "*"
 
 [dev-dependencies]
 quickcheck = "*"

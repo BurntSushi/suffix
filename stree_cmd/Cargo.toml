@@ -24,6 +24,6 @@ lto = true
 docopt = "*"
 rustc-serialize = "*"
 
-[dependencies.suffix]
-path = ".."
+[dependencies.suffix_tree]
+path = "../suffix_tree"
 version = "*"

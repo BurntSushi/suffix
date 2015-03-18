@@ -1,6 +1,4 @@
 //! This crate provides fast suffix array construction with Unicode support.
-//! There is some experimental support for suffix trees (only by constructing
-//! the suffix array first).
 //!
 //! The details of the construction algorithm are documented on the
 //! `SuffixTable` type.
@@ -23,29 +21,6 @@
 //! assert!(st.contains("quick"));
 //! assert!(!st.contains("faux"));
 //! ```
-//!
-//! You can also convert a suffix table to a suffix tree (in linear time):
-//!
-//! ```rust
-//! use suffix::SuffixTable;
-//!
-//! let st = SuffixTable::new("banana");
-//! let tree = st.to_suffix_tree();
-//! println!("{:?}", tree);
-//! ```
-//!
-//! There is a command line utility included in this Cargo package called
-//! `stree` that will write a suffix tree in GraphViz's `dot` format. From
-//! there, it's very easy to visualize it:
-//!
-//! ```ignore
-//! stree "banana" | dot -Tpng > banana.png
-//! ```
-//!
-//! Note that while there are lots of iterators defined for suffix trees in
-//! this crate, there is no useful interface for searching text. Namely, suffix
-//! tree support is very experimental and my current implementation seems
-//! extremely wasteful and not well designed.
 
 #![crate_name = "suffix"]
 #![doc(html_root_url = "http://burntsushi.net/rustdoc/suffix")]
@@ -59,10 +34,6 @@
 #[cfg(test)] extern crate test;
 
 pub use table::SuffixTable;
-pub use tree::{
-    Node, SuffixTree,
-    Children, Ancestors, Preorder, Leaves, SuffixTreeIndices,
-};
 
 // A trivial logging macro. No reason to pull in `log`, which has become
 // difficult to use in tests.
@@ -92,6 +63,4 @@ fn binary_search<T, F>(xs: &[T], mut pred: F) -> usize
     left
 }
 
-mod array;
 mod table;
-mod tree;

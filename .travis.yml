@@ -1,1 +1,9 @@
 language: rust
+script:
+  - cargo build --verbose
+  - cargo test --verbose
+  - cargo doc
+  - cargo bench --verbose
+  - cargo test --verbose --manifest-path=stree_cmd/Cargo.toml
+  - cargo test --verbose --manifest-path=suffix_tree/Cargo.toml
+  - cargo doc --verbose --manifest-path=suffix_tree/Cargo.toml

@@ -1,8 +1,8 @@
-#![feature(exit_status, io)]
+#![feature(exit_status)]
 
 extern crate docopt;
 extern crate "rustc-serialize" as rustc_serialize;
-extern crate suffix;
+extern crate suffix_tree;
 
 use std::env;
 use std::error;
@@ -10,7 +10,7 @@ use std::fmt;
 use std::io::{self, Write};
 
 use docopt::Docopt;
-use suffix::{SuffixTable, SuffixTree, Node};
+use suffix_tree::{SuffixTree, Node};
 
 macro_rules! cerr { ($tt:tt) => (return Err(Error::Other(format!($tt)))); }
 
@@ -69,9 +69,7 @@ fn main() {
 
 impl Args {
     fn run(&self) -> CliResult<()> {
-        let sa = SuffixTable::new(self.text());
-        let st = sa.to_suffix_tree();
-        print_dot_tree(&st);
+        print_dot_tree(&SuffixTree::new(self.text()));
         Ok(())
     }
 

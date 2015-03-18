@@ -5,9 +5,7 @@ use std::slice;
 use std::str;
 use std::u32;
 
-use {SuffixTree, binary_search};
-use array::SuffixArray;
-use tree::to_suffix_tree;
+use binary_search;
 
 use self::SuffixType::{Ascending, Descending, Valley};
 
@@ -129,19 +127,6 @@ impl<'s> SuffixTable<'s> {
     /// intermediate computation.
     pub fn into_parts(self) -> (Cow<'s, str>, Vec<u32>) {
         (self.text, self.table)
-    }
-
-    /// Converts this suffix table to an enhanced suffix array.
-    ///
-    /// Not ready yet.
-    #[doc(hidden)]
-    pub fn into_suffix_array(self) -> SuffixArray<'s> {
-        SuffixArray::from_table(self)
-    }
-
-    /// Creates a suffix tree in linear time and space.
-    pub fn to_suffix_tree(&'s self) -> SuffixTree<'s> {
-        to_suffix_tree(self)
     }
 
     /// Computes the LCP array in linear time and linear space.
