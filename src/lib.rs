@@ -3,7 +3,7 @@
 //! the suffix array first).
 //!
 //! The details of the construction algorithm are documented on the
-//! `SuffixArray` type.
+//! `SuffixTable` type.
 //!
 //! In general, suffix arrays are useful when you want to query some text
 //! repeatedly and quickly.
@@ -68,22 +68,9 @@ pub use tree::{
 // difficult to use in tests.
 macro_rules! lg {
     ($($arg:tt)*) => ({
-        let _ = ::std::old_io::stderr().write_str(&*format!($($arg)*));
-        let _ = ::std::old_io::stderr().write_str("\n");
+        use std::io::{Write, stderr};
+        writeln!(&mut stderr(), $($arg)*).unwrap();
     });
-}
-
-/// Initialize a `Vec` quickly.
-///
-/// This is equivalent to `repeat(0).take(len).collect::<Vec<_>>()`.
-///
-/// TODO: Supposedly, the iterator form should be as fast as this, so we
-/// should be able to remove this in the future.
-fn vec_from_elem<T: Copy>(len: usize, init: T) -> Vec<T> {
-    let mut vec: Vec<T> = Vec::with_capacity(len);
-    unsafe { vec.set_len(len); }
-    for v in vec.iter_mut() { *v = init; }
-    vec
 }
 
 /// Binary search to find first element such that `pred(T) == true`.

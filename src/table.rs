@@ -5,7 +5,7 @@ use std::slice;
 use std::str;
 use std::u32;
 
-use {SuffixTree, binary_search, vec_from_elem};
+use {SuffixTree, binary_search};
 use array::SuffixArray;
 use tree::to_suffix_tree;
 
@@ -146,7 +146,7 @@ impl<'s> SuffixTable<'s> {
 
     /// Computes the LCP array in linear time and linear space.
     pub fn lcp_lens(&self) -> Vec<u32> {
-        let mut inverse = vec_from_elem(self.text.len(), 0u32);
+        let mut inverse = vec![0u32; self.text.len()];
         for (rank, &sufstart) in self.table().iter().enumerate() {
             inverse[sufstart as usize] = rank as u32;
         }
@@ -285,7 +285,7 @@ fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
     // It does require the use of the inverse suffix array, which makes this
     // O(n) in space. The inverse suffix array gives us a special ordering
     // with which to compute the LCPs.
-    let mut lcps = vec_from_elem(table.len(), 0u32);
+    let mut lcps = vec![0u32; table.len()];
     let mut len = 0u32;
     for (sufi2, &rank) in inv.iter().enumerate() {
         if rank == 0 {
@@ -313,7 +313,7 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
 
     // The first LCP is always 0 because of the definition:
     //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
-    let mut lcps = vec_from_elem(table.len(), 0u32);
+    let mut lcps = vec![0u32; table.len()];
     for (i, win) in table.windows(2).enumerate() {
         lcps[i+1] =
             lcp_len(&text[win[0] as usize..], &text[win[1] as usize..]);
@@ -343,7 +343,7 @@ fn naive_table(text: &str) -> Vec<u32> {
 fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     let chars = text.chars().count();
     assert!(chars <= u32::MAX as usize);
-    let mut sa = vec_from_elem(chars, 0u32);
+    let mut sa = vec![0u32; chars];
 
     let mut stypes = SuffixTypes::new(text.len() as u32);
     let mut bins = Bins::new();
@@ -644,7 +644,7 @@ impl Bins {
         self.alphas.sort();
 
         let ptrs_len = self.alphas[self.alphas.len() - 1] + 1;
-        self.ptrs = vec_from_elem(ptrs_len as usize, 0u32);
+        self.ptrs = vec![0u32; ptrs_len as usize];
     }
 
     fn find_head_pointers(&mut self) {
