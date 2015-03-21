@@ -1,6 +1,7 @@
 use std::borrow::{Cow, IntoCow};
+use std::cmp;
 use std::fmt;
-use std::iter::{self, order, AdditiveIterator};
+use std::iter;
 use std::slice;
 use std::str;
 use std::u32;
@@ -186,8 +187,8 @@ impl<'s> SuffixTable<'s> {
     pub fn contains(&self, query: &str) -> bool {
         let nquery = query.chars().count();
         nquery > 0 && self.table.binary_search_by(|&sufi| {
-            order::cmp(self.text[sufi as usize..].chars().take(nquery),
-                       query.chars())
+            iter_cmp(self.text[sufi as usize..].chars().take(nquery),
+                     query.chars())
         }).is_ok()
     }
 
@@ -307,12 +308,11 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
 }
 
 fn lcp_len(a: &str, b: &str) -> u32 {
-    use std::iter::AdditiveIterator;
     a.chars()
      .zip(b.chars())
      .take_while(|&(ca, cb)| ca == cb)
      .map(|(c, _)| c.len_utf8())
-     .sum() as u32
+     .fold(0, |sum, len| sum + len) as u32
 }
 
 fn naive_table(text: &str) -> Vec<u32> {
@@ -820,4 +820,20 @@ impl<'a> IdxChar for (usize, &'a u32) {
 impl IdxChar for (usize, char) {
     #[inline]
     fn idx_char(self) -> (usize, u32) { (self.0, self.1 as u32) }
+}
+
+/// Order `a` and `b` lexicographically using `Ord`
+pub fn iter_cmp<A, L, R>(mut a: L, mut b: R) -> cmp::Ordering
+        where A: Ord, L: Iterator<Item=A>, R: Iterator<Item=A> {
+    loop {
+        match (a.next(), b.next()) {
+            (None, None) => return cmp::Ordering::Equal,
+            (None, _   ) => return cmp::Ordering::Less,
+            (_   , None) => return cmp::Ordering::Greater,
+            (Some(x), Some(y)) => match x.cmp(&y) {
+                cmp::Ordering::Equal => (),
+                non_eq => return non_eq,
+            },
+        }
+    }
 }
