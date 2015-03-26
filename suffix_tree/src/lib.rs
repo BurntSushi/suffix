@@ -23,7 +23,7 @@
 //! The construction algorithm takes linear time and space. (It first builds
 //! a suffix array and converts that to a tree in linear time.)
 
-#![feature(collections, core)]
+#![feature(core, into_cow, str_char)]
 
 extern crate suffix;
 #[cfg(test)] extern crate quickcheck;

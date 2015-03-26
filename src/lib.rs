@@ -28,7 +28,7 @@
 #![deny(missing_docs)]
 
 #![cfg_attr(test, feature(test))]
-#![feature(str_char)]
+#![feature(into_cow, str_char)]
 
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate test;
