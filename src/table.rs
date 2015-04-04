@@ -210,7 +210,7 @@ impl<'s> SuffixTable<'s> {
     /// use suffix::SuffixTable;
     ///
     /// let sa = SuffixTable::new("The quick brown fox was very quick.");
-    /// assert_eq!(sa.positions("quick"), vec![4, 29]);
+    /// assert_eq!(sa.positions("quick"), &[4, 29]);
     /// ```
     pub fn positions(&self, query: &str) -> &[u32] {
         // We can quickly decide whether the query won't match at all if

@@ -1,11 +1,7 @@
-#![feature(exit_status)]
-
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate suffix_tree;
 
-use std::env;
-use std::error;
 use std::fmt;
 use std::io::{self, Write};
 
@@ -40,12 +36,12 @@ enum Error {
     Other(String),
 }
 
-impl error::FromError<io::Error> for Error {
-    fn from_error(err: io::Error) -> Error { Error::Io(err) }
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error { Error::Io(err) }
 }
 
-impl error::FromError<String> for Error {
-    fn from_error(err: String) -> Error { Error::Other(err) }
+impl From<String> for Error {
+    fn from(err: String) -> Error { Error::Other(err) }
 }
 
 impl fmt::Display for Error {
@@ -63,7 +59,7 @@ fn main() {
                             .unwrap_or_else(|e| e.exit());
     if let Err(err) = args.run() {
         write!(&mut io::stderr(), "{}", err).unwrap();
-        env::set_exit_status(1);
+        ::std::process::exit(1);
     }
 }
 

@@ -23,12 +23,10 @@
 //! The construction algorithm takes linear time and space. (It first builds
 //! a suffix array and converts that to a tree in linear time.)
 
-#![feature(core, into_cow, str_char)]
-
 extern crate suffix;
 #[cfg(test)] extern crate quickcheck;
 
-use std::borrow::{Cow, IntoCow, ToOwned};
+use std::borrow::{Cow, ToOwned};
 use std::collections::btree_map::{self, BTreeMap};
 use std::fmt;
 use std::iter;
@@ -62,10 +60,14 @@ struct Rawlink<T> {
     p: *mut T,
 }
 
-impl<T> Copy for Rawlink<T> {}
+impl<T: Copy> Copy for Rawlink<T> {}
+
+impl<T: Copy> Clone for Rawlink<T> {
+    fn clone(&self) -> Rawlink<T> { *self }
+}
 
 impl<'s> SuffixTree<'s> {
-    pub fn new<S>(text: S) -> SuffixTree<'s> where S: IntoCow<'s, str> {
+    pub fn new<S>(text: S) -> SuffixTree<'s> where S: Into<Cow<'s, str>> {
         SuffixTree::from_suffix_table(&SuffixTable::new(text))
     }
 
@@ -73,8 +75,8 @@ impl<'s> SuffixTree<'s> {
         to_suffix_tree(sa)
     }
 
-    fn init<S>(s: S) -> SuffixTree<'s> where S: IntoCow<'s, str> {
-        let s = s.into_cow();
+    fn init<S>(s: S) -> SuffixTree<'s> where S: Into<Cow<'s, str>> {
+        let s = s.into();
         let len = s.len();
         SuffixTree {
             text: s,
@@ -98,7 +100,7 @@ impl<'s> SuffixTree<'s> {
     }
 
     fn key(&self, node: &Node) -> char {
-        self.label(node).char_at(0)
+        self.label(node).chars().nth(0).unwrap()
     }
 }
 
@@ -208,12 +210,20 @@ impl<T> Rawlink<T> {
 
     /// Convert the `Rawlink` into an immutable Option value.
     fn resolve<'a>(&self) -> Option<&'a T> {
-        unsafe { self.p.as_ref() }
+        if self.p.is_null() {
+            None
+        } else {
+            Some(unsafe { &*self.p })
+        }
     }
 
     /// Convert the `Rawlink` into a mutable Option value.
     fn resolve_mut<'a>(&mut self) -> Option<&'a mut T> {
-        unsafe { self.p.as_mut() }
+        if self.p.is_null() {
+            None
+        } else {
+            Some(unsafe { &mut *self.p })
+        }
     }
 }
 

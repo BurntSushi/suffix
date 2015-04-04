@@ -93,105 +93,105 @@ fn prop_naive_equals_sais() {
 #[test]
 fn empty_find_empty() {
     let sa = sais("");
-    assert_eq!(sa.positions(""), vec![]);
+    assert_eq!(sa.positions(""), &[]);
     assert!(!sa.contains(""));
 }
 
 #[test]
 fn empty_find_one() {
     let sa = sais("");
-    assert_eq!(sa.positions("a"), vec![]);
+    assert_eq!(sa.positions("a"), &[]);
     assert!(!sa.contains("a"));
 }
 
 #[test]
 fn empty_find_two() {
     let sa = sais("");
-    assert_eq!(sa.positions("ab"), vec![]);
+    assert_eq!(sa.positions("ab"), &[]);
     assert!(!sa.contains("ab"));
 }
 
 #[test]
 fn one_find_empty() {
     let sa = sais("a");
-    assert_eq!(sa.positions(""), vec![]);
+    assert_eq!(sa.positions(""), &[]);
     assert!(!sa.contains(""));
 }
 
 #[test]
 fn one_find_one_notexists() {
     let sa = sais("a");
-    assert_eq!(sa.positions("b"), vec![]);
+    assert_eq!(sa.positions("b"), &[]);
     assert!(!sa.contains("b"));
 }
 
 #[test]
 fn one_find_one_exists() {
     let sa = sais("a");
-    assert_eq!(sa.positions("a"), vec![0]);
+    assert_eq!(sa.positions("a"), &[0]);
     assert!(sa.contains("a"));
 }
 
 #[test]
 fn two_find_one_exists() {
     let sa = sais("ab");
-    assert_eq!(sa.positions("b"), vec![1]);
+    assert_eq!(sa.positions("b"), &[1]);
     assert!(sa.contains("b"));
 }
 
 #[test]
 fn two_find_two_exists() {
     let sa = sais("aa");
-    assert_eq!(sa.positions("a"), vec![1, 0]);
+    assert_eq!(vec![1, 0], sa.positions("a"));
     assert!(sa.contains("a"));
 }
 
 #[test]
 fn many_exists() {
     let sa = sais("zzzzzaazzzzz");
-    assert_eq!(sa.positions("a"), vec![5, 6]);
+    assert_eq!(vec![5, 6], sa.positions("a"));
     assert!(sa.contains("a"));
 }
 
 #[test]
 fn many_exists_long() {
     let sa = sais("zzzzabczzzzzabczzzzzz");
-    assert_eq!(sa.positions("abc"), vec![4, 12]);
+    assert_eq!(sa.positions("abc"), &[4, 12]);
     assert!(sa.contains("abc"));
 }
 
 #[test]
 fn query_longer() {
     let sa = sais("az");
-    assert_eq!(sa.positions("mnomnomnomnomnomnomno"), vec![]);
+    assert_eq!(sa.positions("mnomnomnomnomnomnomno"), &[]);
     assert!(!sa.contains("mnomnomnomnomnomnomno"));
 }
 
 #[test]
 fn query_longer_less() {
     let sa = sais("zz");
-    assert_eq!(sa.positions("mnomnomnomnomnomnomno"), vec![]);
+    assert_eq!(sa.positions("mnomnomnomnomnomnomno"), &[]);
     assert!(!sa.contains("mnomnomnomnomnomnomno"));
 }
 
 #[test]
 fn query_longer_greater() {
     let sa = sais("aa");
-    assert_eq!(sa.positions("mnomnomnomnomnomnomno"), vec![]);
+    assert_eq!(sa.positions("mnomnomnomnomnomnomno"), &[]);
     assert!(!sa.contains("mnomnomnomnomnomnomno"));
 }
 
 #[test]
 fn query_spaces() {
     let sa = sais("The quick brown fox was very quick.");
-    assert_eq!(sa.positions("quick"), vec![4, 29]);
+    assert_eq!(sa.positions("quick"), &[4, 29]);
 }
 
 #[test]
 fn unicode_snowman() {
     let sa = sais("☃abc☃");
     assert!(sa.contains("☃"));
-    assert_eq!(sa.positions("☃"), vec![6, 0]);
+    assert_eq!(sa.positions("☃"), &[6, 0]);
 }
 
 #[test]

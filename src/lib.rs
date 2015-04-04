@@ -15,7 +15,7 @@
 //! use suffix::SuffixTable;
 //!
 //! let st = SuffixTable::new("the quick brown fox was quick.");
-//! assert_eq!(st.positions("quick"), vec![4, 24]);
+//! assert_eq!(st.positions("quick"), &[4, 24]);
 //!
 //! // Or if you just want to test existence, this is faster:
 //! assert!(st.contains("quick"));

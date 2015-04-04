@@ -14,6 +14,13 @@ license = "Unlicense"
 name = "suffix"
 path = "src/lib.rs"
 
+[[bin]]
+name = "suffix-array"
+path = "src/main.rs"
+test = false
+bench = false
+doc = false
+
 [[test]]
 name = "tests"
 path = "tests/tests.rs"
