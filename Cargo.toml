@@ -1,6 +1,6 @@
 [package]
 name = "suffix"
-version = "0.2.8"  #:version
+version = "0.2.9"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Suffix arrays."
 documentation = "http://burntsushi.net/rustdoc/suffix/"
