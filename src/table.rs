@@ -1,12 +1,10 @@
-use std::borrow::{Cow, IntoCow};
+use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::iter;
 use std::slice;
 use std::str;
 use std::u32;
-
-use binary_search;
 
 use self::SuffixType::{Ascending, Descending, Valley};
 
@@ -77,8 +75,8 @@ impl<'s> SuffixTable<'s> {
     /// is degraded with a bigger number type. `u32` strikes a nice balance; it
     /// gets good performance while allowing most reasonably sized documents
     /// (~4GB).
-    pub fn new<S>(text: S) -> SuffixTable<'s> where S: IntoCow<'s, str> {
-        let text = text.into_cow();
+    pub fn new<S>(text: S) -> SuffixTable<'s> where S: Into<Cow<'s, str>> {
+        let text = text.into();
         let table = sais_table(&text);
         SuffixTable {
             text: text,
@@ -92,8 +90,8 @@ impl<'s> SuffixTable<'s> {
     /// tends to have lower overhead, so it can be useful when creating lots
     /// of suffix tables for small strings.
     #[doc(hidden)]
-    pub fn new_naive<S>(text: S) -> SuffixTable<'s> where S: IntoCow<'s, str> {
-        let text = text.into_cow();
+    pub fn new_naive<S>(text: S) -> SuffixTable<'s> where S: Into<Cow<'s, str>> {
+        let text = text.into();
         let table = naive_table(&text);
         SuffixTable {
             text: text,
@@ -113,8 +111,8 @@ impl<'s> SuffixTable<'s> {
     /// This fails if the number of characters in `text` does not equal the
     /// number of suffixes in `table`.
     pub fn from_parts<'t, S, T>(text: S, table: T) -> SuffixTable<'s>
-            where S: IntoCow<'s, str>, T: IntoCow<'t, [u32]> {
-        let (text, table) = (text.into_cow(), table.into_cow());
+            where S: Into<Cow<'s, str>>, T: Into<Cow<'t, [u32]>> {
+        let (text, table) = (text.into(), table.into());
         assert_eq!(text.chars().count(), table.len());
         SuffixTable {
             text: text,
@@ -517,7 +515,7 @@ struct SuffixTypes {
     types: Vec<SuffixType>,
 }
 
-#[derive(Copy, Debug, Eq)]
+#[derive(Clone, Copy, Debug, Eq)]
 enum SuffixType {
     Ascending,
     Descending,
@@ -728,18 +726,13 @@ impl<'s> Text for Unicode<'s> {
 
     #[inline]
     fn prev(&self, i: u32) -> (u32, u32) {
-        let str::CharRange { ch: c, next: j } =
-            self.s.char_range_at_reverse(i as usize);
-        // This is slower, but "stable."
-        // let (j, c) = self.s[..i as usize].char_indices().rev().next().unwrap();
-        (j as u32, c as u32)
+        let (ch, next) = ::unicode::char_range_at_reverse(self.s, i as usize);
+        (next as u32, ch)
     }
 
     #[inline]
     fn char_at(&self, i: u32) -> u32 {
-        self.s.char_at(i as usize) as u32
-        // This seems slower, but "stable."
-        // self.s[i as usize..].chars().next().unwrap() as u32
+        self.s[i as usize..].chars().next().unwrap() as u32
     }
 
     fn char_indices(&self) -> str::CharIndices<'s> {
@@ -836,4 +829,23 @@ pub fn iter_cmp<A, L, R>(mut a: L, mut b: R) -> cmp::Ordering
             },
         }
     }
+}
+
+/// Binary search to find first element such that `pred(T) == true`.
+///
+/// Assumes that if `pred(xs[i]) == true` then `pred(xs[i+1]) == true`.
+///
+/// If all elements yield `pred(T) == false`, then `xs.len()` is returned.
+fn binary_search<T, F>(xs: &[T], mut pred: F) -> usize
+        where F: FnMut(&T) -> bool {
+    let (mut left, mut right) = (0, xs.len());
+    while left < right {
+        let mid = (left + right) / 2;
+        if pred(&xs[mid]) {
+            right = mid;
+        } else {
+            left = mid + 1;
+        }
+    }
+    left
 }

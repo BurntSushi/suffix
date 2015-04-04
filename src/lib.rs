@@ -28,7 +28,6 @@
 #![deny(missing_docs)]
 
 #![cfg_attr(test, feature(test))]
-#![feature(into_cow, str_char)]
 
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate test;
@@ -44,23 +43,5 @@ macro_rules! lg {
     });
 }
 
-/// Binary search to find first element such that `pred(T) == true`.
-///
-/// Assumes that if `pred(xs[i]) == true` then `pred(xs[i+1]) == true`.
-///
-/// If all elements yield `pred(T) == false`, then `xs.len()` is returned.
-fn binary_search<T, F>(xs: &[T], mut pred: F) -> usize
-        where F: FnMut(&T) -> bool {
-    let (mut left, mut right) = (0, xs.len());
-    while left < right {
-        let mid = (left + right) / 2;
-        if pred(&xs[mid]) {
-            right = mid;
-        } else {
-            left = mid + 1;
-        }
-    }
-    left
-}
-
 mod table;
+mod unicode;
