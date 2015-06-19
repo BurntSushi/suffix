@@ -1,6 +1,6 @@
 [package]
 name = "suffix_tree"
-version = "0.1.0"  #:version
+version = "0.2.0"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Suffix trees."
 documentation = "http://burntsushi.net/rustdoc/suffix/"
