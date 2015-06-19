@@ -1,4 +1,4 @@
-#![feature(collections, test)]
+#![feature(str_match_indices, test)]
 
 extern crate quickcheck;
 extern crate suffix;

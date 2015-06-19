@@ -62,3 +62,17 @@ of suffix trees/arrays in QuickCheck properties, and use those for randomized
 testing. Thankfully, generation is easy in this case: any arbitrary Unicode
 string will do.
 
+
+Benchmarks for AP009048.fasta repeated N times
+==============================================
+Explicit Unicode handling
+-------------------------
+x1   - 0.9s
+x10  - 16.5s
+x100 - 212.7s
+
+No Explicit Unicode handling
+----------------------------
+x1   - 0.9s
+x10  - 17s
+x100 - 221s

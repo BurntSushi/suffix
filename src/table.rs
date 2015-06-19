@@ -3,7 +3,6 @@ use std::cmp;
 use std::fmt;
 use std::iter;
 use std::slice;
-use std::str;
 use std::u32;
 
 use self::SuffixType::{Ascending, Descending, Valley};
@@ -163,6 +162,12 @@ impl<'s> SuffixTable<'s> {
         &self.text[self.table[i] as usize..]
     }
 
+    /// Returns the suffix bytes starting at index `i`.
+    #[inline]
+    fn sbytes(&self, i: usize) -> &[u8] {
+        &self.text.as_bytes()[self.table[i] as usize..]
+    }
+
     /// Returns true if and only if `query` is in text.
     ///
     /// This runs in `O(mlogn)` time, where `m == query.len()` and
@@ -183,10 +188,10 @@ impl<'s> SuffixTable<'s> {
     /// assert!(sa.contains("quick"));
     /// ```
     pub fn contains(&self, query: &str) -> bool {
-        let nquery = query.chars().count();
-        nquery > 0 && self.table.binary_search_by(|&sufi| {
-            iter_cmp(self.text[sufi as usize..].chars().take(nquery),
-                     query.chars())
+        let (text, query) = (self.text.as_bytes(), query.as_bytes());
+        query.len() > 0 && self.table.binary_search_by(|&sufi| {
+            iter_cmp(text[sufi as usize..].iter().take(query.len()),
+                     query.iter())
         }).is_ok()
     }
 
@@ -213,12 +218,14 @@ impl<'s> SuffixTable<'s> {
     /// assert_eq!(sa.positions("quick"), &[4, 29]);
     /// ```
     pub fn positions(&self, query: &str) -> &[u32] {
+        let (text, query) = (self.text.as_bytes(), query.as_bytes());
+
         // We can quickly decide whether the query won't match at all if
         // it's outside the range of suffixes.
-        if self.len() == 0
+        if text.len() == 0
            || query.len() == 0
-           || (query < self.suffix(0) && !self.suffix(0).starts_with(query))
-           || query > self.suffix(self.len() - 1) {
+           || (query < self.sbytes(0) && !self.sbytes(0).starts_with(query))
+           || query > self.sbytes(self.len() - 1) {
             return &[];
         }
 
@@ -230,9 +237,9 @@ impl<'s> SuffixTable<'s> {
         // for the end by finding the first occurrence that doesn't start
         // with `query`. That becomes our upper bound.
         let start = binary_search(&self.table,
-            |&sufi| query <= &self.text[sufi as usize..]);
+            |&sufi| query <= &text[sufi as usize..]);
         let end = start + binary_search(&self.table[start..],
-            |&sufi| !self.text[sufi as usize..].starts_with(query));
+            |&sufi| !text[sufi as usize..].starts_with(query));
 
         // Whoops. If start is somehow greater than end, then we've got
         // nothing.
@@ -257,39 +264,39 @@ impl<'s> fmt::Debug for SuffixTable<'s> {
     }
 }
 
-#[allow(dead_code)]
-fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
-    // This algorithm is bunk because it doesn't work on Unicode. See comment
-    // in the code below.
-
-    // This is a linear time construction algorithm taken from the first
-    // two slides of:
-    // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
-    //
-    // It does require the use of the inverse suffix array, which makes this
-    // O(n) in space. The inverse suffix array gives us a special ordering
-    // with which to compute the LCPs.
-    let mut lcps = vec![0u32; table.len()];
-    let mut len = 0u32;
-    for (sufi2, &rank) in inv.iter().enumerate() {
-        if rank == 0 {
-            continue
-        }
-        let sufi1 = table[(rank - 1) as usize];
-        len += lcp_len(&text[(sufi1 + len) as usize..],
-                       &text[(sufi2 as u32 + len) as usize..]);
-        lcps[rank as usize] = len;
-        if len > 0 {
-            // This is an illegal move because `len` is derived from `text`,
-            // which is a Unicode string. Subtracting `1` here assumes every
-            // character is a single byte in UTF-8, which is obviously wrong.
-            // TODO: Figure out how to get LCP lengths in linear time on
-            // UTF-8 encoded strings.
-            len -= 1;
-        }
-    }
-    lcps
-}
+// #[allow(dead_code)]
+// fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
+    // // This algorithm is bunk because it doesn't work on Unicode. See comment
+    // // in the code below.
+//
+    // // This is a linear time construction algorithm taken from the first
+    // // two slides of:
+    // // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
+    // //
+    // // It does require the use of the inverse suffix array, which makes this
+    // // O(n) in space. The inverse suffix array gives us a special ordering
+    // // with which to compute the LCPs.
+    // let mut lcps = vec![0u32; table.len()];
+    // let mut len = 0u32;
+    // for (sufi2, &rank) in inv.iter().enumerate() {
+        // if rank == 0 {
+            // continue
+        // }
+        // let sufi1 = table[(rank - 1) as usize];
+        // len += lcp_len(&text[(sufi1 + len) as usize..],
+                       // &text[(sufi2 as u32 + len) as usize..]);
+        // lcps[rank as usize] = len;
+        // if len > 0 {
+            // // This is an illegal move because `len` is derived from `text`,
+            // // which is a Unicode string. Subtracting `1` here assumes every
+            // // character is a single byte in UTF-8, which is obviously wrong.
+            // // TODO: Figure out how to get LCP lengths in linear time on
+            // // UTF-8 encoded strings.
+            // len -= 1;
+        // }
+    // }
+    // lcps
+// }
 
 fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
     // This is quadratic because there are N comparisons for each LCP.
@@ -298,40 +305,39 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
     // The first LCP is always 0 because of the definition:
     //   LCP_LENS[i] = lcp_len(suf[i-1], suf[i])
     let mut lcps = vec![0u32; table.len()];
+    let text = text.as_bytes();
     for (i, win) in table.windows(2).enumerate() {
-        lcps[i+1] =
-            lcp_len(&text[win[0] as usize..], &text[win[1] as usize..]);
+        lcps[i+1] = lcp_len(
+            &text[win[0] as usize..], &text[win[1] as usize..]);
     }
     lcps
 }
 
-fn lcp_len(a: &str, b: &str) -> u32 {
-    a.chars()
-     .zip(b.chars())
+fn lcp_len(a: &[u8], b: &[u8]) -> u32 {
+    a.iter().cloned()
+     .zip(b.iter().cloned())
      .take_while(|&(ca, cb)| ca == cb)
-     .map(|(c, _)| c.len_utf8())
-     .fold(0, |sum, len| sum + len) as u32
+     .count() as u32
 }
 
 fn naive_table(text: &str) -> Vec<u32> {
-    let mut table = Vec::with_capacity(text.len() / 2);
-    let mut count = 0usize;
-    for (ci, _) in text.char_indices() { table.push(ci as u32); count += 1; }
-    assert!(count <= u32::MAX as usize);
-
+    let text = text.as_bytes();
+    assert!(text.len() <= u32::MAX as usize);
+    let mut table = vec![0u32; text.len()];
+    for i in 0..table.len() {
+        table[i] = i as u32;
+    }
     table.sort_by(|&a, &b| text[a as usize..].cmp(&text[b as usize..]));
     table
 }
 
 fn sais_table<'s>(text: &'s str) -> Vec<u32> {
-    let chars = text.chars().count();
-    assert!(chars <= u32::MAX as usize);
-    let mut sa = vec![0u32; chars];
-
+    let text = text.as_bytes();
+    assert!(text.len() <= u32::MAX as usize);
+    let mut sa = vec![0u32; text.len()];
     let mut stypes = SuffixTypes::new(text.len() as u32);
     let mut bins = Bins::new();
-
-    sais(&mut *sa, &mut stypes, &mut bins, &Unicode::from_str(text));
+    sais(&mut *sa, &mut stypes, &mut bins, &Utf8(text));
     sa
 }
 
@@ -703,45 +709,29 @@ trait Text {
     fn wstring_equal(&self, stypes: &SuffixTypes, w1: u32, w2: u32) -> bool;
 }
 
-struct Unicode<'s> {
-    s: &'s str,
-    len: u32,
-}
+struct Utf8<'s>(&'s [u8]);
 
-impl<'s> Unicode<'s> {
-    fn from_str(s: &'s str) -> Unicode<'s> {
-        Unicode::from_str_len(s, s.len() as u32)
-    }
-
-    fn from_str_len(s: &'s str, len: u32) -> Unicode<'s> {
-        Unicode { s: s, len: len }
-    }
-}
-
-impl<'s> Text for Unicode<'s> {
-    type IdxChars = str::CharIndices<'s>;
+impl<'s> Text for Utf8<'s> {
+    type IdxChars = iter::Enumerate<slice::Iter<'s, u8>>;
 
     #[inline]
-    fn len(&self) -> u32 { self.len }
+    fn len(&self) -> u32 { self.0.len() as u32 }
 
     #[inline]
     fn prev(&self, i: u32) -> (u32, u32) {
-        let (ch, next) = ::unicode::char_range_at_reverse(self.s, i as usize);
-        (next as u32, ch)
+        (i - 1, self.0[i as usize - 1] as u32)
     }
 
     #[inline]
-    fn char_at(&self, i: u32) -> u32 {
-        self.s[i as usize..].chars().next().unwrap() as u32
-    }
+    fn char_at(&self, i: u32) -> u32 { self.0[i as usize] as u32 }
 
-    fn char_indices(&self) -> str::CharIndices<'s> {
-        self.s.char_indices()
+    fn char_indices(&self) -> iter::Enumerate<slice::Iter<'s, u8>> {
+        self.0.iter().enumerate()
     }
 
     fn wstring_equal(&self, stypes: &SuffixTypes, w1: u32, w2: u32) -> bool {
-        let w1chars = self.s[w1 as usize..].char_indices();
-        let w2chars = self.s[w2 as usize..].char_indices();
+        let w1chars = self.0[w1 as usize..].iter().enumerate();
+        let w2chars = self.0[w2 as usize..].iter().enumerate();
         for ((i1, c1), (i2, c2)) in w1chars.zip(w2chars) {
             let (i1, i2) = (w1 + i1 as u32, w2 + i2 as u32);
             if c1 != c2 || !stypes.equal(i1, i2) {
@@ -803,6 +793,11 @@ impl<'s> Text for LexNames<'s> {
 trait IdxChar {
     /// Convert `Self` to a `(usize, u32)`.
     fn idx_char(self) -> (usize, u32);
+}
+
+impl<'a> IdxChar for (usize, &'a u8) {
+    #[inline]
+    fn idx_char(self) -> (usize, u32) { (self.0, *self.1 as u32) }
 }
 
 impl<'a> IdxChar for (usize, &'a u32) {

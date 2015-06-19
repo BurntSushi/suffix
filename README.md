@@ -85,15 +85,15 @@ a suffix table is that you can afford to do that once---but you hope to gain
 much faster queries once you do.
 
 ```
-test search_scan_exists_many            ... bench:      4301 ns/iter (+/- 68)
-test search_scan_exists_one             ... bench:        26 ns/iter (+/- 0)
-test search_scan_not_exists             ... bench:    131761 ns/iter (+/- 255)
-test search_suffix_exists_many          ... bench:       371 ns/iter (+/- 3)
-test search_suffix_exists_many_contains ... bench:       132 ns/iter (+/- 3)
-test search_suffix_exists_one           ... bench:       193 ns/iter (+/- 1)
-test search_suffix_exists_one_contains  ... bench:        16 ns/iter (+/- 0)
-test search_suffix_not_exists           ... bench:       165 ns/iter (+/- 1)
-test search_suffix_not_exists_contains  ... bench:       106 ns/iter (+/- 0)
+test search_scan_exists_many            ... bench:       8,601 ns/iter (+/- 85)
+test search_scan_exists_one             ... bench:          12 ns/iter (+/- 0)
+test search_scan_not_exists             ... bench:     368,788 ns/iter (+/- 811)
+test search_suffix_exists_many          ... bench:         414 ns/iter (+/- 15)
+test search_suffix_exists_many_contains ... bench:         303 ns/iter (+/- 4)
+test search_suffix_exists_one           ... bench:         250 ns/iter (+/- 1)
+test search_suffix_exists_one_contains  ... bench:          28 ns/iter (+/- 0)
+test search_suffix_not_exists           ... bench:         241 ns/iter (+/- 2)
+test search_suffix_not_exists_contains  ... bench:         179 ns/iter (+/- 3)
 ```
 
 The "many" benchmarks test repeated queries that match. The "one" benchmarks
@@ -110,12 +110,12 @@ They compare the linear time algorithm with the naive construction algorithm
 (call `sort` on all suffixes, which is `O(n^2 * logn)`).
 
 ```
-test naive_dna_medium                   ... bench:  24657031 ns/iter (+/- 112718)
-test naive_dna_small                    ... bench:   1868072 ns/iter (+/- 3110)
-test naive_small                        ... bench:       296 ns/iter (+/- 2)
-test sais_dna_medium                    ... bench:  10889339 ns/iter (+/- 42678)
-test sais_dna_small                     ... bench:   1021010 ns/iter (+/- 3746)
-test sais_small                         ... bench:      5286 ns/iter (+/- 58)
+test naive_dna_medium                   ... bench:  33,676,690 ns/iter (+/- 86,233)
+test naive_dna_small                    ... bench:   2,574,217 ns/iter (+/- 11,005)
+test naive_small                        ... bench:         425 ns/iter (+/- 6)
+test sais_dna_medium                    ... bench:  10,398,456 ns/iter (+/- 133,742)
+test sais_dna_small                     ... bench:     977,165 ns/iter (+/- 4,125)
+test sais_small                         ... bench:       4,038 ns/iter (+/- 39)
 ```
 
 These benchmarks might make you say, "Whoa, the special algorithm isn't that

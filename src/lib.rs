@@ -44,4 +44,3 @@ macro_rules! lg {
 }
 
 mod table;
-mod unicode;

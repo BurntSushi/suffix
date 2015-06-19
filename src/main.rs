@@ -4,8 +4,6 @@ use std::io::Read;
 
 #[allow(dead_code)]
 mod table;
-#[allow(dead_code)]
-mod unicode;
 
 fn main() {
     let fpath = env::args().nth(1).unwrap();
