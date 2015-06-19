@@ -49,7 +49,7 @@ pub struct SuffixTree<'s> {
 /// A node in a suffix tree.
 pub struct Node {
     parent: Rawlink<Node>,
-    children: BTreeMap<char, Box<Node>>,
+    children: BTreeMap<u8, Box<Node>>,
     suffixes: Vec<u32>,
     start: u32,
     end: u32,
@@ -95,12 +95,12 @@ impl<'s> SuffixTree<'s> {
     }
 
     /// Get the path label *into* `node`.
-    pub fn label(&self, node: &Node) -> &str {
-        &self.text[node.start as usize .. node.end as usize]
+    pub fn label(&self, node: &Node) -> &[u8] {
+        &self.text.as_bytes()[node.start as usize .. node.end as usize]
     }
 
-    fn key(&self, node: &Node) -> char {
-        self.label(node).chars().nth(0).unwrap()
+    fn key(&self, node: &Node) -> u8 {
+        self.label(node)[0]
     }
 }
 
@@ -235,7 +235,7 @@ impl<'s> fmt::Debug for SuffixTree<'s> {
             if node.is_root() {
                 try!(writeln!(f, "ROOT"));
             } else {
-                try!(writeln!(f, "{}{}", indent, st.label(node)));
+                try!(writeln!(f, "{}{:?}", indent, &st.label(node)));
             }
             for child in node.children() {
                 try!(fmt(f, st, child, depth + 1));
@@ -283,7 +283,7 @@ impl<'t> Iterator for Ancestors<'t> {
 ///
 /// `'t` is the lifetime of the suffix tree.
 pub struct Children<'t> {
-    it: btree_map::Values<'t, char, Box<Node>>,
+    it: btree_map::Values<'t, u8, Box<Node>>,
 }
 
 impl<'t> Iterator for Children<'t> {
@@ -540,7 +540,7 @@ mod tests {
             let sa = SuffixTable::new(&*s);
             let st = SuffixTree::from_suffix_table(&sa);
             for (i, sufi) in st.root.suffix_indices().enumerate() {
-                if &st.text[sufi as usize..] != sa.suffix(i) {
+                if &st.text.as_bytes()[sufi as usize..] != sa.suffix_bytes(i) {
                     return false;
                 }
             }

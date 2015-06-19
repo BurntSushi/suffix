@@ -164,7 +164,7 @@ impl<'s> SuffixTable<'s> {
 
     /// Returns the suffix bytes starting at index `i`.
     #[inline]
-    fn sbytes(&self, i: usize) -> &[u8] {
+    pub fn suffix_bytes(&self, i: usize) -> &[u8] {
         &self.text.as_bytes()[self.table[i] as usize..]
     }
 
@@ -224,8 +224,9 @@ impl<'s> SuffixTable<'s> {
         // it's outside the range of suffixes.
         if text.len() == 0
            || query.len() == 0
-           || (query < self.sbytes(0) && !self.sbytes(0).starts_with(query))
-           || query > self.sbytes(self.len() - 1) {
+           || (query < self.suffix_bytes(0)
+               && !self.suffix_bytes(0).starts_with(query))
+           || query > self.suffix_bytes(self.len() - 1) {
             return &[];
         }
 

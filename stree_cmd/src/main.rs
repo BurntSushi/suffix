@@ -91,7 +91,7 @@ fn print_dot_node(st: &SuffixTree, node: &Node, parent: u32, mut id: u32) -> u32
 
     let label = if is_only_leaf(node) {
         println!("{} [label=\"{}\", shape=box]", node_id, terminals(node));
-        format!("{}$", st.label(node))
+        format!("{}$", label(st, node))
     } else {
         println!("{} [label=\"\"]", node_id);
         if node.has_terminals() {
@@ -99,7 +99,7 @@ fn print_dot_node(st: &SuffixTree, node: &Node, parent: u32, mut id: u32) -> u32
             println!("{} -> {} [label=\"$\"]", node_id, id);
             id += 1;
         }
-        st.label(node).to_string()
+        label(st, node)
     };
     if parent != node_id {
         println!("{} -> {} [label=\"{}\"];", parent, node_id, label);
@@ -117,4 +117,12 @@ fn is_only_leaf(node: &Node) -> bool {
 fn terminals(node: &Node) -> String {
     node.suffixes().iter()
         .map(|&n| n.to_string()).collect::<Vec<_>>().connect(", ")
+}
+
+fn label(st: &SuffixTree, node: &Node) -> String {
+    let bytes = st.label(node);
+    match String::from_utf8(bytes.to_vec()) {
+        Ok(s) => s,
+        Err(_) => format!("{:?}", bytes),
+    }
 }
