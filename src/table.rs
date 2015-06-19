@@ -148,7 +148,7 @@ impl<'s> SuffixTable<'s> {
 
     /// Returns the number of suffixes in the table.
     ///
-    /// Alternatively, this is the number of characters in the text.
+    /// Alternatively, this is the number of *bytes* in the text.
     #[inline]
     pub fn len(&self) -> usize { self.table.len() }
 
