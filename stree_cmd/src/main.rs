@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate suffix_tree;

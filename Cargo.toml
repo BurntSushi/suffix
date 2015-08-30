@@ -33,4 +33,4 @@ path = "tests/bench.rs"
 opt-level = 3
 
 [dev-dependencies]
-quickcheck = "*"
+quickcheck = "0.2"

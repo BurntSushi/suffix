@@ -25,7 +25,7 @@ Add it to your `Cargo.toml` like so:
 
 ```toml
 [dependencies]
-suffix = "*"
+suffix = "0.3"
 ```
 
 

@@ -21,9 +21,9 @@ opt-level = 3
 lto = true
 
 [dependencies]
-docopt = "*"
-rustc-serialize = "*"
+docopt = "0.6"
+rustc-serialize = "0.3"
 
 [dependencies.suffix_tree]
 path = "../suffix_tree"
-version = "*"
+version = "0.2"

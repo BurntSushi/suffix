@@ -16,7 +16,7 @@ path = "src/lib.rs"
 
 [dependencies.suffix]
 path = ".."
-version = "*"
+version = "0.3"
 
 [dev-dependencies]
-quickcheck = "*"
+quickcheck = "0.2"
