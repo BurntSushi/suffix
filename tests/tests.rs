@@ -161,6 +161,17 @@ fn many_exists_long() {
 }
 
 #[test]
+fn parts() {
+    let sa = sais("poëzie");
+    let sa2 = sa.clone();
+    
+    let (data, table) = sa2.into_parts();
+    let sa3 = SuffixTable::from_parts(data, table);
+
+    assert_eq!(sa, sa3);
+}
+
+#[test]
 fn query_longer() {
     let sa = sais("az");
     assert_eq!(sa.positions("mnomnomnomnomnomnomno"), &[]);
