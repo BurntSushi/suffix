@@ -413,8 +413,8 @@ fn sais<T>(sa: &mut [u32], stypes: &mut SuffixTypes, bins: &mut Bins, text: &T)
     let mut name = 0u32;
     // We set our "name buffer" to be max u32 values. Since there are at
     // most n/2 wstrings, a name can never be greater than n/2.
-    for i in (num_wstrs..(sa.len() as u32)) { sa[i as usize] = u32::MAX; }
-    for i in (0..num_wstrs) {
+    for i in num_wstrs..(sa.len() as u32) { sa[i as usize] = u32::MAX; }
+    for i in 0..num_wstrs {
         let cur_sufi = sa[i as usize];
         if prev_sufi == 0 || !text.wstring_equal(stypes, cur_sufi, prev_sufi) {
             name += 1;
@@ -444,7 +444,7 @@ fn sais<T>(sa: &mut [u32], stypes: &mut SuffixTypes, bins: &mut Bins, text: &T)
         sais(&mut r_sa[..num_wstrs as usize], stypes, bins, &LexNames(r_text));
         stypes.compute(text);
     } else {
-        for i in (0..num_wstrs) {
+        for i in 0..num_wstrs {
             let reducedi = sa[((sa.len() as u32) - num_wstrs + i) as usize];
             sa[reducedi as usize] = i;
         }
@@ -469,12 +469,12 @@ fn sais<T>(sa: &mut [u32], stypes: &mut SuffixTypes, bins: &mut Bins, text: &T)
     // that lexical name (which was made possible in the loop above).
     //
     // In other words, this sets the suffix indices of only the wstrings.
-    for i in (0..num_wstrs) {
+    for i in 0..num_wstrs {
         let sufi = sa[i as usize];
         sa[i as usize] = sa[(sa.len() as u32 - num_wstrs + sufi) as usize];
     }
     // Now zero out everything after the wstrs.
-    for i in (num_wstrs..(sa.len() as u32)) {
+    for i in num_wstrs..(sa.len() as u32) {
         sa[i as usize] = 0;
     }
 
