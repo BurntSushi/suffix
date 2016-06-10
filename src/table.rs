@@ -9,7 +9,8 @@ use self::SuffixType::{Ascending, Descending, Valley};
 
 /// A suffix table is a sequence of lexicographically sorted suffixes.
 ///
-/// The lifetime `'s` refers to the text when borrowed.
+/// The lifetimes `'s` and `'t` (respectively) refer to the text and suffix
+/// indices when borrowed.
 ///
 /// This is distinct from a suffix array in that it *only* contains
 /// suffix indices. It has no "enhanced" information like the inverse suffix
@@ -51,12 +52,12 @@ use self::SuffixType::{Ascending, Descending, Valley};
 /// when solving the subproblems mentioned above (even if the alphabet of the
 /// original text is very small).
 #[derive(Clone, Eq, PartialEq)]
-pub struct SuffixTable<'s> {
+pub struct SuffixTable<'s, 't> {
     text: Cow<'s, str>,
-    table: Vec<u32>,
+    table: Cow<'t, [u32]>,
 }
 
-impl<'s> SuffixTable<'s> {
+impl<'s, 't> SuffixTable<'s, 't> {
     /// Creates a new suffix table for `text` in `O(n)` time and `O(kn)`
     /// space, where `k` is the size of the alphabet in the text.
     ///
@@ -74,9 +75,9 @@ impl<'s> SuffixTable<'s> {
     /// is degraded with a bigger number type. `u32` strikes a nice balance; it
     /// gets good performance while allowing most reasonably sized documents
     /// (~4GB).
-    pub fn new<S>(text: S) -> SuffixTable<'s> where S: Into<Cow<'s, str>> {
+    pub fn new<S>(text: S) -> SuffixTable<'s, 't> where S: Into<Cow<'s, str>> {
         let text = text.into();
-        let table = sais_table(&text);
+        let table = sais_table(&text).into();
         SuffixTable {
             text: text,
             table: table,
@@ -89,9 +90,9 @@ impl<'s> SuffixTable<'s> {
     /// tends to have lower overhead, so it can be useful when creating lots
     /// of suffix tables for small strings.
     #[doc(hidden)]
-    pub fn new_naive<S>(text: S) -> SuffixTable<'s> where S: Into<Cow<'s, str>> {
+    pub fn new_naive<S>(text: S) -> SuffixTable<'s, 't> where S: Into<Cow<'s, str>> {
         let text = text.into();
-        let table = naive_table(&text);
+        let table = naive_table(&text).into();
         SuffixTable {
             text: text,
             table: table,
@@ -105,17 +106,15 @@ impl<'s> SuffixTable<'s> {
     /// is not checked! If it isn't, this will cause other operations on a
     /// suffix table to fail in weird ways.
     ///
-    /// Note that if `table` is borrowed (i.e., a `&[u8]`), then it is copied.
-    ///
     /// This fails if the number of characters in `text` does not equal the
     /// number of suffixes in `table`.
-    pub fn from_parts<'t, S, T>(text: S, table: T) -> SuffixTable<'s>
+    pub fn from_parts<S, T>(text: S, table: T) -> SuffixTable<'s, 't>
             where S: Into<Cow<'s, str>>, T: Into<Cow<'t, [u32]>> {
         let (text, table) = (text.into(), table.into());
         assert_eq!(text.len(), table.len());
         SuffixTable {
             text: text,
-            table: table.into_owned(),
+            table: table,
         }
     }
 
@@ -123,7 +122,7 @@ impl<'s> SuffixTable<'s> {
     ///
     /// This is useful to avoid copying when the suffix table is part of an
     /// intermediate computation.
-    pub fn into_parts(self) -> (Cow<'s, str>, Vec<u32>) {
+    pub fn into_parts(self) -> (Cow<'s, str>, Cow<'t, [u32]>) {
         (self.text, self.table)
     }
 
@@ -252,7 +251,7 @@ impl<'s> SuffixTable<'s> {
     }
 }
 
-impl<'s> fmt::Debug for SuffixTable<'s> {
+impl<'s, 't> fmt::Debug for SuffixTable<'s, 't> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(writeln!(f, "\n-----------------------------------------"));
         try!(writeln!(f, "SUFFIX TABLE"));
