@@ -112,7 +112,7 @@ impl<'s> SuffixTable<'s> {
     pub fn from_parts<'t, S, T>(text: S, table: T) -> SuffixTable<'s>
             where S: Into<Cow<'s, str>>, T: Into<Cow<'t, [u32]>> {
         let (text, table) = (text.into(), table.into());
-        assert_eq!(text.chars().count(), table.len());
+        assert_eq!(text.len(), table.len());
         SuffixTable {
             text: text,
             table: table.into_owned(),
