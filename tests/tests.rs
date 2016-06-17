@@ -1,4 +1,4 @@
-#![feature(str_match_indices, test)]
+#![feature(test)]
 
 extern crate quickcheck;
 extern crate suffix;
@@ -88,6 +88,18 @@ fn prop_naive_equals_sais() {
     qc(prop as fn(String) -> TestResult);
 }
 
+#[test]
+fn prop_matches_naive() {
+    fn prop(s: String) -> bool {
+        let expected_table = SuffixTable::new_naive(&*s);
+        let expected = expected_table.table();
+        let got_table = SuffixTable::new(&*s);
+        let got = got_table.table();
+        expected == got
+    }
+    qc(prop as fn(String) -> bool);
+}
+
 // Do some testing on substring search.
 
 #[test]
@@ -164,7 +176,7 @@ fn many_exists_long() {
 fn parts() {
     let sa = sais("poëzie");
     let sa2 = sa.clone();
-    
+
     let (data, table) = sa2.into_parts();
     let sa3 = SuffixTable::from_parts(data, table);
 
@@ -203,6 +215,14 @@ fn unicode_snowman() {
     let sa = sais("☃abc☃");
     assert!(sa.contains("☃"));
     assert_eq!(sa.positions("☃"), &[6, 0]);
+}
+
+#[test]
+fn prop_length() {
+    fn prop(s: String) -> bool {
+        s.len() == sais(&s).len()
+    }
+    qc(prop as fn(String) -> bool);
 }
 
 #[test]
