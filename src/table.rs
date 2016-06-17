@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::cmp;
 use std::fmt;
 use std::iter;
 use std::slice;
@@ -90,7 +89,10 @@ impl<'s, 't> SuffixTable<'s, 't> {
     /// tends to have lower overhead, so it can be useful when creating lots
     /// of suffix tables for small strings.
     #[doc(hidden)]
-    pub fn new_naive<S>(text: S) -> SuffixTable<'s, 't> where S: Into<Cow<'s, str>> {
+    pub fn new_naive<S>(
+        text: S,
+    ) -> SuffixTable<'s, 't>
+    where S: Into<Cow<'s, str>> {
         let text = text.into();
         let table = naive_table(&text).into();
         SuffixTable {
@@ -108,8 +110,11 @@ impl<'s, 't> SuffixTable<'s, 't> {
     ///
     /// This fails if the number of characters in `text` does not equal the
     /// number of suffixes in `table`.
-    pub fn from_parts<S, T>(text: S, table: T) -> SuffixTable<'s, 't>
-            where S: Into<Cow<'s, str>>, T: Into<Cow<'t, [u32]>> {
+    pub fn from_parts<S, T>(
+        text: S,
+        table: T,
+    ) -> SuffixTable<'s, 't>
+    where S: Into<Cow<'s, str>>, T: Into<Cow<'t, [u32]>> {
         let (text, table) = (text.into(), table.into());
         assert_eq!(text.len(), table.len());
         SuffixTable {
@@ -126,7 +131,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
         (self.text, self.table)
     }
 
-    /// Computes the LCP array in linear time and linear space.
+    /// Computes the LCP array.
     pub fn lcp_lens(&self) -> Vec<u32> {
         let mut inverse = vec![0u32; self.text.len()];
         for (rank, &sufstart) in self.table().iter().enumerate() {
@@ -189,8 +194,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     pub fn contains(&self, query: &str) -> bool {
         let (text, query) = (self.text.as_bytes(), query.as_bytes());
         query.len() > 0 && self.table.binary_search_by(|&sufi| {
-            iter_cmp(text[sufi as usize..].iter().take(query.len()),
-                     query.iter())
+            text[sufi as usize..].iter().take(query.len()).cmp(query.iter())
         }).is_ok()
     }
 
@@ -341,8 +345,12 @@ fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     sa
 }
 
-fn sais<T>(sa: &mut [u32], stypes: &mut SuffixTypes, bins: &mut Bins, text: &T)
-        where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
+fn sais<T>(
+    sa: &mut [u32],
+    stypes: &mut SuffixTypes,
+    bins: &mut Bins,
+    text: &T,
+) where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
     // Instead of working out edge cases in the code below, just allow them
     // to assume >=2 characters.
     match text.len() {
@@ -535,8 +543,10 @@ impl SuffixTypes {
         SuffixTypes { types: stypes }
     }
 
-    fn compute<'a, T>(&mut self, text: &T)
-            where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
+    fn compute<'a, T>(
+        &mut self,
+        text: &T,
+    ) where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
         let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
         let (mut lasti, mut lastc) = match chars.next() {
             None => return,
@@ -810,29 +820,16 @@ impl IdxChar for (usize, char) {
     fn idx_char(self) -> (usize, u32) { (self.0, self.1 as u32) }
 }
 
-/// Order `a` and `b` lexicographically using `Ord`
-pub fn iter_cmp<A, L, R>(mut a: L, mut b: R) -> cmp::Ordering
-        where A: Ord, L: Iterator<Item=A>, R: Iterator<Item=A> {
-    loop {
-        match (a.next(), b.next()) {
-            (None, None) => return cmp::Ordering::Equal,
-            (None, _   ) => return cmp::Ordering::Less,
-            (_   , None) => return cmp::Ordering::Greater,
-            (Some(x), Some(y)) => match x.cmp(&y) {
-                cmp::Ordering::Equal => (),
-                non_eq => return non_eq,
-            },
-        }
-    }
-}
-
 /// Binary search to find first element such that `pred(T) == true`.
 ///
 /// Assumes that if `pred(xs[i]) == true` then `pred(xs[i+1]) == true`.
 ///
 /// If all elements yield `pred(T) == false`, then `xs.len()` is returned.
-fn binary_search<T, F>(xs: &[T], mut pred: F) -> usize
-        where F: FnMut(&T) -> bool {
+fn binary_search<T, F>(
+    xs: &[T],
+    mut pred: F,
+) -> usize
+where F: FnMut(&T) -> bool {
     let (mut left, mut right) = (0, xs.len());
     while left < right {
         let mid = (left + right) / 2;
