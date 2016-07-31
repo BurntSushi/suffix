@@ -1,9 +1,9 @@
 Fast linear time & space suffix arrays for Rust. Supports Unicode!
 
 [![Build status](https://api.travis-ci.org/BurntSushi/suffix.png)](https://travis-ci.org/BurntSushi/suffix)
+[![](http://meritbadge.herokuapp.com/suffix)](https://crates.io/crates/suffix)
 
 Dual-licensed under MIT or the [UNLICENSE](http://unlicense.org).
-[![](http://meritbadge.herokuapp.com/suffix)](https://crates.io/crates/suffix)
 
 
 ### Documentation
