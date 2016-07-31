@@ -76,7 +76,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     /// (~4GB).
     pub fn new<S>(text: S) -> SuffixTable<'s, 't> where S: Into<Cow<'s, str>> {
         let text = text.into();
-        let table = sais_table(&text).into();
+        let table = Cow::Owned(sais_table(&text));
         SuffixTable {
             text: text,
             table: table,
@@ -94,7 +94,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     ) -> SuffixTable<'s, 't>
     where S: Into<Cow<'s, str>> {
         let text = text.into();
-        let table = naive_table(&text).into();
+        let table = Cow::Owned(naive_table(&text));
         SuffixTable {
             text: text,
             table: table,
