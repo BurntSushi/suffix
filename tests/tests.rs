@@ -1,8 +1,5 @@
-#![feature(test)]
-
 extern crate quickcheck;
 extern crate suffix;
-extern crate test;
 
 use quickcheck::{QuickCheck, TestResult, Testable};
 use suffix::SuffixTable;

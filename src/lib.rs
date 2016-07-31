@@ -27,10 +27,7 @@
 
 #![deny(missing_docs)]
 
-#![cfg_attr(test, feature(test))]
-
 #[cfg(test)] extern crate quickcheck;
-#[cfg(test)] extern crate test;
 
 pub use table::SuffixTable;
 
