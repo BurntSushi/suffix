@@ -1,6 +1,6 @@
 [package]
 name = "suffix"
-version = "0.4.1"  #:version
+version = "1.0.0"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Suffix arrays."
 documentation = "https://docs.rs/suffix"
