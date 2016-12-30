@@ -8,13 +8,11 @@ Dual-licensed under MIT or the [UNLICENSE](http://unlicense.org).
 
 ### Documentation
 
-The API is mostly documented with examples:
-[http://burntsushi.net/rustdoc/suffix/](http://burntsushi.net/rustdoc/suffix/).
+https://docs.rs/suffix
 
 If you just want the details on how construction algorithm used, see the
-documentation for the
-[`SuffixTable`](http://burntsushi.net/rustdoc/suffix/struct.SuffixTable.html)
-type. This is where you'll find info on exactly how much overhead is required.
+documentation for the `SuffixTable` type. This is where you'll find info on
+exactly how much overhead is required.
 
 
 ### Installation
@@ -25,7 +23,7 @@ Add it to your `Cargo.toml` like so:
 
 ```toml
 [dependencies]
-suffix = "0.3"
+suffix = "1"
 ```
 
 
@@ -85,15 +83,15 @@ a suffix table is that you can afford to do that once---but you hope to gain
 much faster queries once you do.
 
 ```
-test search_scan_exists_many            ... bench:       8,601 ns/iter (+/- 85)
-test search_scan_exists_one             ... bench:          12 ns/iter (+/- 0)
-test search_scan_not_exists             ... bench:     368,788 ns/iter (+/- 811)
-test search_suffix_exists_many          ... bench:         414 ns/iter (+/- 15)
-test search_suffix_exists_many_contains ... bench:         303 ns/iter (+/- 4)
-test search_suffix_exists_one           ... bench:         250 ns/iter (+/- 1)
-test search_suffix_exists_one_contains  ... bench:          28 ns/iter (+/- 0)
-test search_suffix_not_exists           ... bench:         241 ns/iter (+/- 2)
-test search_suffix_not_exists_contains  ... bench:         179 ns/iter (+/- 3)
+test search_scan_exists_many            ... bench:       2,964 ns/iter (+/- 180)
+test search_scan_exists_one             ... bench:          19 ns/iter (+/- 1)
+test search_scan_not_exists             ... bench:      84,645 ns/iter (+/- 3,558)
+test search_suffix_exists_many          ... bench:         228 ns/iter (+/- 65)
+test search_suffix_exists_many_contains ... bench:         102 ns/iter (+/- 10)
+test search_suffix_exists_one           ... bench:         162 ns/iter (+/- 13)
+test search_suffix_exists_one_contains  ... bench:           8 ns/iter (+/- 0)
+test search_suffix_not_exists           ... bench:         177 ns/iter (+/- 21)
+test search_suffix_not_exists_contains  ... bench:          50 ns/iter (+/- 6)
 ```
 
 The "many" benchmarks test repeated queries that match. The "one" benchmarks
@@ -110,12 +108,12 @@ They compare the linear time algorithm with the naive construction algorithm
 (call `sort` on all suffixes, which is `O(n^2 * logn)`).
 
 ```
-test naive_dna_medium                   ... bench:  33,676,690 ns/iter (+/- 86,233)
-test naive_dna_small                    ... bench:   2,574,217 ns/iter (+/- 11,005)
-test naive_small                        ... bench:         425 ns/iter (+/- 6)
-test sais_dna_medium                    ... bench:  10,398,456 ns/iter (+/- 133,742)
-test sais_dna_small                     ... bench:     977,165 ns/iter (+/- 4,125)
-test sais_small                         ... bench:       4,038 ns/iter (+/- 39)
+test naive_dna_medium                   ... bench:  22,307,313 ns/iter (+/- 939,557)
+test naive_dna_small                    ... bench:   1,785,734 ns/iter (+/- 43,401)
+test naive_small                        ... bench:         228 ns/iter (+/- 10)
+test sais_dna_medium                    ... bench:   7,514,327 ns/iter (+/- 280,544)
+test sais_dna_small                     ... bench:     712,938 ns/iter (+/- 34,730)
+test sais_small                         ... bench:       1,038 ns/iter (+/- 58)
 ```
 
 These benchmarks might make you say, "Whoa, the special algorithm isn't that
@@ -127,4 +125,3 @@ It would be more useful to compare this to other suffix array implementations,
 but I haven't had time yet. Moreover, most (all?) don't support Unicode and
 instead operate on bytes, which means they aren't paying the overhead of
 decoding UTF-8.
-

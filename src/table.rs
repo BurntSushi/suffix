@@ -538,9 +538,7 @@ enum SuffixType {
 
 impl SuffixTypes {
     fn new(num_bytes: u32) -> SuffixTypes {
-        let mut stypes = Vec::with_capacity(num_bytes as usize);
-        unsafe { stypes.set_len(num_bytes as usize); }
-        SuffixTypes { types: stypes }
+        SuffixTypes { types: vec![SuffixType::Ascending; num_bytes as usize] }
     }
 
     fn compute<'a, T>(
@@ -632,7 +630,7 @@ impl Bins {
     }
 
     fn find_sizes<I>(&mut self, chars: I) where I: Iterator<Item=u32> {
-        unsafe { self.alphas.set_len(0); }
+        self.alphas.clear();
         for size in self.sizes.iter_mut() { *size = 0; }
         for c in chars {
             self.inc_size(c);
@@ -681,10 +679,7 @@ impl Bins {
     #[inline]
     fn inc_size(&mut self, c: u32) {
         if c as usize >= self.sizes.len() {
-            let (len, new_len) = (self.sizes.len(), 1 + (c as usize));
-            self.sizes.reserve(new_len - len);
-            unsafe { self.sizes.set_len(new_len); }
-            for v in self.sizes[len..new_len].iter_mut() { *v = 0; }
+            self.sizes.resize(1 + (c as usize), 0);
         }
         self.sizes[c as usize] += 1;
     }

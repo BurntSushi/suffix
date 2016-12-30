@@ -3,7 +3,7 @@ name = "suffix"
 version = "0.4.1"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Suffix arrays."
-documentation = "http://burntsushi.net/rustdoc/suffix/"
+documentation = "https://docs.rs/suffix"
 homepage = "https://github.com/BurntSushi/suffix"
 repository = "https://github.com/BurntSushi/suffix"
 readme = "README.md"
@@ -33,4 +33,4 @@ path = "tests/bench.rs"
 opt-level = 3
 
 [dev-dependencies]
-quickcheck = "0.2"
+quickcheck = "0.4"

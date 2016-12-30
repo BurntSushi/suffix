@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "stree_cmd"
 version = "0.2.1"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]

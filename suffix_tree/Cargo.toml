@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "suffix_tree"
 version = "0.2.2"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
