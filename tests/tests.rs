@@ -4,14 +4,6 @@ extern crate suffix;
 use quickcheck::{QuickCheck, TestResult, Testable};
 use suffix::SuffixTable;
 
-// A trivial logging macro. No reason to pull in `log`, which has become
-// difficult to use in tests.
-macro_rules! lg {
-    ($($arg:tt)*) => ({
-        let _ = writeln!(&mut ::std::old_io::stderr(), $($arg)*);
-    });
-}
-
 fn sais(text: &str) -> SuffixTable { SuffixTable::new(text) }
 fn naive(text: &str) -> SuffixTable { SuffixTable::new_naive(text) }
 

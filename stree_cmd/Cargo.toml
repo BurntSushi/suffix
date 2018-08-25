@@ -17,14 +17,11 @@ doc = false
 test = false
 bench = false
 
-[profile.release]
-opt-level = 3
-lto = true
-
 [dependencies]
-docopt = "0.6"
-rustc-serialize = "0.3"
+docopt = "1"
+serde = "1"
+serde_derive = "1"
 
 [dependencies.suffix_tree]
 path = "../suffix_tree"
-version = "0.2"
+version = "0.3"

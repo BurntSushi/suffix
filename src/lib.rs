@@ -22,22 +22,11 @@
 //! assert!(!st.contains("faux"));
 //! ```
 
-#![crate_name = "suffix"]
-#![doc(html_root_url = "http://burntsushi.net/rustdoc/suffix")]
-
 #![deny(missing_docs)]
 
-#[cfg(test)] extern crate quickcheck;
+#[cfg(test)]
+extern crate quickcheck;
 
 pub use table::SuffixTable;
-
-// A trivial logging macro. No reason to pull in `log`, which has become
-// difficult to use in tests.
-macro_rules! lg {
-    ($($arg:tt)*) => ({
-        use std::io::{Write, stderr};
-        writeln!(&mut stderr(), $($arg)*).unwrap();
-    });
-}
 
 mod table;

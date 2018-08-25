@@ -1,6 +1,6 @@
 [package]
 name = "suffix"
-version = "1.0.0"  #:version
+version = "1.1.0"  #:version
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 description = "Suffix arrays."
 documentation = "https://docs.rs/suffix"
@@ -9,6 +9,7 @@ repository = "https://github.com/BurntSushi/suffix"
 readme = "README.md"
 keywords = ["suffix", "text", "search", "index"]
 license = "Unlicense/MIT"
+autotests = false
 
 [lib]
 name = "suffix"
@@ -33,4 +34,4 @@ path = "tests/bench.rs"
 opt-level = 3
 
 [dev-dependencies]
-quickcheck = "0.4"
+quickcheck = { version = "0.7", default-features = false }
