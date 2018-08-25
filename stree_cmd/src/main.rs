@@ -1,7 +1,9 @@
 #![allow(deprecated)]
 
 extern crate docopt;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate suffix_tree;
 
 use std::fmt;
@@ -9,12 +11,6 @@ use std::io::{self, Write};
 
 use docopt::Docopt;
 use suffix_tree::{SuffixTree, Node};
-
-macro_rules! cerr { ($tt:tt) => (return Err(Error::Other(format!($tt)))); }
-
-macro_rules! lg {
-    ($($arg:tt)*) => ({ writeln!(&mut io::stderr(), $($arg)*).unwrap(); });
-}
 
 static USAGE: &'static str = "
 Usage:
@@ -26,7 +22,7 @@ Options:
     -h, --help                  Show this usage message.
 ";
 
-#[derive(RustcDecodable)]
+#[derive(Deserialize)]
 struct Args {
     arg_text: Vec<String>,
 }
@@ -57,7 +53,7 @@ impl fmt::Display for Error {
 
 fn main() {
     let args: Args = Docopt::new(USAGE)
-                            .and_then(|d| d.decode())
+                            .and_then(|d| d.deserialize())
                             .unwrap_or_else(|e| e.exit());
     if let Err(err) = args.run() {
         write!(&mut io::stderr(), "{}", err).unwrap();
