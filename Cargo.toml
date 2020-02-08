@@ -34,4 +34,4 @@ path = "tests/bench.rs"
 opt-level = 3
 
 [dev-dependencies]
-quickcheck = { version = "0.7", default-features = false }
+quickcheck = { version = "0.9", default-features = false }
