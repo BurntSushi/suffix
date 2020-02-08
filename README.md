@@ -25,7 +25,7 @@ Add it to your `Cargo.toml` like so:
 
 ```toml
 [dependencies]
-suffix = "1"
+suffix = "1.2"
 ```
 
 
@@ -34,8 +34,6 @@ suffix = "1"
 Usage is simple. Just create a suffix array and search:
 
 ```rust
-extern crate suffix;
-
 use suffix::SuffixTable;
 
 fn main() {
