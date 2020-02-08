@@ -23,8 +23,9 @@
 //! The construction algorithm takes linear time and space. (It first builds
 //! a suffix array and converts that to a tree in linear time.)
 
+#[cfg(test)]
+extern crate quickcheck;
 extern crate suffix;
-#[cfg(test)] extern crate quickcheck;
 
 use std::borrow::{Cow, ToOwned};
 use std::collections::btree_map::{self, BTreeMap};
@@ -63,11 +64,16 @@ struct Rawlink<T> {
 impl<T: Copy> Copy for Rawlink<T> {}
 
 impl<T: Copy> Clone for Rawlink<T> {
-    fn clone(&self) -> Rawlink<T> { *self }
+    fn clone(&self) -> Rawlink<T> {
+        *self
+    }
 }
 
 impl<'s> SuffixTree<'s> {
-    pub fn new<S>(text: S) -> SuffixTree<'s> where S: Into<Cow<'s, str>> {
+    pub fn new<S>(text: S) -> SuffixTree<'s>
+    where
+        S: Into<Cow<'s, str>>,
+    {
         SuffixTree::from_suffix_table(&SuffixTable::new(text))
     }
 
@@ -75,13 +81,13 @@ impl<'s> SuffixTree<'s> {
         to_suffix_tree(sa)
     }
 
-    fn init<S>(s: S) -> SuffixTree<'s> where S: Into<Cow<'s, str>> {
+    fn init<S>(s: S) -> SuffixTree<'s>
+    where
+        S: Into<Cow<'s, str>>,
+    {
         let s = s.into();
         let len = s.len();
-        SuffixTree {
-            text: s,
-            root: Node::leaf(len as u32, 0, 0),
-        }
+        SuffixTree { text: s, root: Node::leaf(len as u32, 0, 0) }
     }
 
     /// Get the text that is indexed by this suffix tree.
@@ -96,7 +102,7 @@ impl<'s> SuffixTree<'s> {
 
     /// Get the path label *into* `node`.
     pub fn label(&self, node: &Node) -> &[u8] {
-        &self.text.as_bytes()[node.start as usize .. node.end as usize]
+        &self.text.as_bytes()[node.start as usize..node.end as usize]
     }
 
     fn key(&self, node: &Node) -> u8 {
@@ -200,12 +206,12 @@ impl Node {
 impl<T> Rawlink<T> {
     /// Like `Option::None` for Rawlink.
     fn none() -> Rawlink<T> {
-        Rawlink{p: ptr::null_mut()}
+        Rawlink { p: ptr::null_mut() }
     }
 
     /// Like `Option::Some` for Rawlink
     fn some(n: &mut T) -> Rawlink<T> {
-        Rawlink{p: n}
+        Rawlink { p: n }
     }
 
     /// Convert the `Rawlink` into an immutable Option value.
@@ -229,8 +235,12 @@ impl<T> Rawlink<T> {
 
 impl<'s> fmt::Debug for SuffixTree<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fn fmt<'s>(f: &mut fmt::Formatter, st: &SuffixTree<'s>,
-                   node: &Node, depth: usize) -> fmt::Result {
+        fn fmt<'s>(
+            f: &mut fmt::Formatter,
+            st: &SuffixTree<'s>,
+            node: &Node,
+            depth: usize,
+        ) -> fmt::Result {
             let indent: String = iter::repeat(' ').take(depth * 2).collect();
             if node.is_root() {
                 try!(writeln!(f, "ROOT"));
@@ -252,10 +262,16 @@ impl<'s> fmt::Debug for SuffixTree<'s> {
 
 impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Node {{ start: {}, end: {}, len(children): {}, \
+        write!(
+            f,
+            "Node {{ start: {}, end: {}, len(children): {}, \
                            terminals: {}, parent? {} }}",
-               self.start, self.end, self.children.len(), self.suffixes.len(),
-               self.parent().map(|_| "yes").unwrap_or("no"))
+            self.start,
+            self.end,
+            self.children.len(),
+            self.suffixes.len(),
+            self.parent().map(|_| "yes").unwrap_or("no")
+        )
     }
 }
 
@@ -378,7 +394,10 @@ impl<'t> Iterator for SuffixTreeIndices<'t> {
         }
         match self.it.next() {
             None => None,
-            Some(leaf) => { self.node = Some(leaf); self.next() }
+            Some(leaf) => {
+                self.node = Some(leaf);
+                self.next()
+            }
         }
     }
 }
@@ -395,7 +414,9 @@ fn to_suffix_tree(sa: &SuffixTable) -> SuffixTree<'static> {
             match cur.parent.resolve_mut() {
                 // We've reached the root, so we have no choice but to use it.
                 None => break,
-                Some(p) => { cur = p; }
+                Some(p) => {
+                    cur = p;
+                }
             }
         }
         cur
@@ -416,7 +437,10 @@ fn to_suffix_tree(sa: &SuffixTable) -> SuffixTree<'static> {
             // entirety of `vins`, which in turn means we can simply
             // add it as a new leaf.
             let mut node = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.text().len() as u32);
+                sufstart,
+                sufstart + lcp_len,
+                sa.text().len() as u32,
+            );
             node.add_parent(vins);
 
             let first_char = st.key(&node);
@@ -457,20 +481,23 @@ fn to_suffix_tree(sa: &SuffixTable) -> SuffixTree<'static> {
             let mut rnode = vins.children.remove(&rkey).unwrap();
 
             // 2) create new internal node (full path label == LCP)
-            let mut int_node = Node::internal(table[i-1] + dv,
-                                              table[i-1] + lcp_len);
+            let mut int_node =
+                Node::internal(table[i - 1] + dv, table[i - 1] + lcp_len);
             int_node.add_parent(vins);
 
             // 3) Attach old node to new internal node and update
             // the label.
-            rnode.start = table[i-1] + lcp_len;
-            rnode.end = table[i-1] + rnode.path_len;
+            rnode.start = table[i - 1] + lcp_len;
+            rnode.end = table[i - 1] + rnode.path_len;
             rnode.add_parent(&mut *int_node);
 
             // 4) Create new leaf node with the current suffix, but with
             // the lcp trimmed.
             let mut leaf = Node::leaf(
-                sufstart, sufstart + lcp_len, sa.text().len() as u32);
+                sufstart,
+                sufstart + lcp_len,
+                sa.text().len() as u32,
+            );
             leaf.add_parent(&mut *int_node);
 
             // Update the last node we visited.
