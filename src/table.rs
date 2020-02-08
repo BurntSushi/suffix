@@ -257,12 +257,12 @@ impl<'s, 't> SuffixTable<'s, 't> {
 
 impl<'s, 't> fmt::Debug for SuffixTable<'s, 't> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(writeln!(f, "\n-----------------------------------------"));
-        try!(writeln!(f, "SUFFIX TABLE"));
-        try!(writeln!(f, "text: {}", self.text()));
+        writeln!(f, "\n-----------------------------------------")?;
+        writeln!(f, "SUFFIX TABLE")?;
+        writeln!(f, "text: {}", self.text())?;
         for (rank, &sufstart) in self.table.iter().enumerate() {
-            try!(writeln!(f, "suffix[{}] {}, {}",
-                          rank, sufstart, self.suffix(rank)));
+            writeln!(f, "suffix[{}] {}, {}",
+                          rank, sufstart, self.suffix(rank))?;
         }
         writeln!(f, "-----------------------------------------")
     }
