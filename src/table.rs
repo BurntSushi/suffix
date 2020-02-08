@@ -74,13 +74,13 @@ impl<'s, 't> SuffixTable<'s, 't> {
     /// is degraded with a bigger number type. `u32` strikes a nice balance; it
     /// gets good performance while allowing most reasonably sized documents
     /// (~4GB).
-    pub fn new<S>(text: S) -> SuffixTable<'s, 't> where S: Into<Cow<'s, str>> {
+    pub fn new<S>(text: S) -> SuffixTable<'s, 't>
+    where
+        S: Into<Cow<'s, str>>,
+    {
         let text = text.into();
         let table = Cow::Owned(sais_table(&text));
-        SuffixTable {
-            text: text,
-            table: table,
-        }
+        SuffixTable { text: text, table: table }
     }
 
     /// The same as `new`, except it runs in `O(n^2 * logn)` time.
@@ -89,16 +89,13 @@ impl<'s, 't> SuffixTable<'s, 't> {
     /// tends to have lower overhead, so it can be useful when creating lots
     /// of suffix tables for small strings.
     #[doc(hidden)]
-    pub fn new_naive<S>(
-        text: S,
-    ) -> SuffixTable<'s, 't>
-    where S: Into<Cow<'s, str>> {
+    pub fn new_naive<S>(text: S) -> SuffixTable<'s, 't>
+    where
+        S: Into<Cow<'s, str>>,
+    {
         let text = text.into();
         let table = Cow::Owned(naive_table(&text));
-        SuffixTable {
-            text: text,
-            table: table,
-        }
+        SuffixTable { text: text, table: table }
     }
 
     /// Creates a new suffix table from an existing list of lexicographically
@@ -110,17 +107,14 @@ impl<'s, 't> SuffixTable<'s, 't> {
     ///
     /// This fails if the number of characters in `text` does not equal the
     /// number of suffixes in `table`.
-    pub fn from_parts<S, T>(
-        text: S,
-        table: T,
-    ) -> SuffixTable<'s, 't>
-    where S: Into<Cow<'s, str>>, T: Into<Cow<'t, [u32]>> {
+    pub fn from_parts<S, T>(text: S, table: T) -> SuffixTable<'s, 't>
+    where
+        S: Into<Cow<'s, str>>,
+        T: Into<Cow<'t, [u32]>>,
+    {
         let (text, table) = (text.into(), table.into());
         assert_eq!(text.len(), table.len());
-        SuffixTable {
-            text: text,
-            table: table,
-        }
+        SuffixTable { text: text, table: table }
     }
 
     /// Extract the parts of a suffix table.
@@ -144,21 +138,29 @@ impl<'s, 't> SuffixTable<'s, 't> {
 
     /// Return the suffix table.
     #[inline]
-    pub fn table(&self) -> &[u32] { &self.table }
+    pub fn table(&self) -> &[u32] {
+        &self.table
+    }
 
     /// Return the text.
     #[inline]
-    pub fn text(&self) -> &str { &self.text }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
 
     /// Returns the number of suffixes in the table.
     ///
     /// Alternatively, this is the number of *bytes* in the text.
     #[inline]
-    pub fn len(&self) -> usize { self.table.len() }
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
 
     /// Returns `true` iff `self.len() == 0`.
     #[inline]
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
     /// Returns the suffix at index `i`.
     #[inline]
@@ -193,9 +195,16 @@ impl<'s, 't> SuffixTable<'s, 't> {
     /// ```
     pub fn contains(&self, query: &str) -> bool {
         let (text, query) = (self.text.as_bytes(), query.as_bytes());
-        query.len() > 0 && self.table.binary_search_by(|&sufi| {
-            text[sufi as usize..].iter().take(query.len()).cmp(query.iter())
-        }).is_ok()
+        query.len() > 0
+            && self
+                .table
+                .binary_search_by(|&sufi| {
+                    text[sufi as usize..]
+                        .iter()
+                        .take(query.len())
+                        .cmp(query.iter())
+                })
+                .is_ok()
     }
 
     /// Returns an unordered list of positions where `query` starts in `text`.
@@ -226,10 +235,11 @@ impl<'s, 't> SuffixTable<'s, 't> {
         // We can quickly decide whether the query won't match at all if
         // it's outside the range of suffixes.
         if text.len() == 0
-           || query.len() == 0
-           || (query < self.suffix_bytes(0)
-               && !self.suffix_bytes(0).starts_with(query))
-           || query > self.suffix_bytes(self.len() - 1) {
+            || query.len() == 0
+            || (query < self.suffix_bytes(0)
+                && !self.suffix_bytes(0).starts_with(query))
+            || query > self.suffix_bytes(self.len() - 1)
+        {
             return &[];
         }
 
@@ -240,10 +250,13 @@ impl<'s, 't> SuffixTable<'s, 't> {
         // The key difference is that after we find the start index, we look
         // for the end by finding the first occurrence that doesn't start
         // with `query`. That becomes our upper bound.
-        let start = binary_search(&self.table,
-            |&sufi| query <= &text[sufi as usize..]);
-        let end = start + binary_search(&self.table[start..],
-            |&sufi| !text[sufi as usize..].starts_with(query));
+        let start = binary_search(&self.table, |&sufi| {
+            query <= &text[sufi as usize..]
+        });
+        let end = start
+            + binary_search(&self.table[start..], |&sufi| {
+                !text[sufi as usize..].starts_with(query)
+            });
 
         // Whoops. If start is somehow greater than end, then we've got
         // nothing.
@@ -261,8 +274,13 @@ impl<'s, 't> fmt::Debug for SuffixTable<'s, 't> {
         writeln!(f, "SUFFIX TABLE")?;
         writeln!(f, "text: {}", self.text())?;
         for (rank, &sufstart) in self.table.iter().enumerate() {
-            writeln!(f, "suffix[{}] {}, {}",
-                          rank, sufstart, self.suffix(rank))?;
+            writeln!(
+                f,
+                "suffix[{}] {}, {}",
+                rank,
+                sufstart,
+                self.suffix(rank)
+            )?;
         }
         writeln!(f, "-----------------------------------------")
     }
@@ -270,36 +288,36 @@ impl<'s, 't> fmt::Debug for SuffixTable<'s, 't> {
 
 // #[allow(dead_code)]
 // fn lcp_lens_linear(text: &str, table: &[u32], inv: &[u32]) -> Vec<u32> {
-    // // This algorithm is bunk because it doesn't work on Unicode. See comment
-    // // in the code below.
+// // This algorithm is bunk because it doesn't work on Unicode. See comment
+// // in the code below.
 //
-    // // This is a linear time construction algorithm taken from the first
-    // // two slides of:
-    // // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
-    // //
-    // // It does require the use of the inverse suffix array, which makes this
-    // // O(n) in space. The inverse suffix array gives us a special ordering
-    // // with which to compute the LCPs.
-    // let mut lcps = vec![0u32; table.len()];
-    // let mut len = 0u32;
-    // for (sufi2, &rank) in inv.iter().enumerate() {
-        // if rank == 0 {
-            // continue
-        // }
-        // let sufi1 = table[(rank - 1) as usize];
-        // len += lcp_len(&text[(sufi1 + len) as usize..],
-                       // &text[(sufi2 as u32 + len) as usize..]);
-        // lcps[rank as usize] = len;
-        // if len > 0 {
-            // // This is an illegal move because `len` is derived from `text`,
-            // // which is a Unicode string. Subtracting `1` here assumes every
-            // // character is a single byte in UTF-8, which is obviously wrong.
-            // // TODO: Figure out how to get LCP lengths in linear time on
-            // // UTF-8 encoded strings.
-            // len -= 1;
-        // }
-    // }
-    // lcps
+// // This is a linear time construction algorithm taken from the first
+// // two slides of:
+// // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
+// //
+// // It does require the use of the inverse suffix array, which makes this
+// // O(n) in space. The inverse suffix array gives us a special ordering
+// // with which to compute the LCPs.
+// let mut lcps = vec![0u32; table.len()];
+// let mut len = 0u32;
+// for (sufi2, &rank) in inv.iter().enumerate() {
+// if rank == 0 {
+// continue
+// }
+// let sufi1 = table[(rank - 1) as usize];
+// len += lcp_len(&text[(sufi1 + len) as usize..],
+// &text[(sufi2 as u32 + len) as usize..]);
+// lcps[rank as usize] = len;
+// if len > 0 {
+// // This is an illegal move because `len` is derived from `text`,
+// // which is a Unicode string. Subtracting `1` here assumes every
+// // character is a single byte in UTF-8, which is obviously wrong.
+// // TODO: Figure out how to get LCP lengths in linear time on
+// // UTF-8 encoded strings.
+// len -= 1;
+// }
+// }
+// lcps
 // }
 
 fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
@@ -311,17 +329,18 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
     let mut lcps = vec![0u32; table.len()];
     let text = text.as_bytes();
     for (i, win) in table.windows(2).enumerate() {
-        lcps[i+1] = lcp_len(
-            &text[win[0] as usize..], &text[win[1] as usize..]);
+        lcps[i + 1] =
+            lcp_len(&text[win[0] as usize..], &text[win[1] as usize..]);
     }
     lcps
 }
 
 fn lcp_len(a: &[u8], b: &[u8]) -> u32 {
-    a.iter().cloned()
-     .zip(b.iter().cloned())
-     .take_while(|&(ca, cb)| ca == cb)
-     .count() as u32
+    a.iter()
+        .cloned()
+        .zip(b.iter().cloned())
+        .take_while(|&(ca, cb)| ca == cb)
+        .count() as u32
 }
 
 fn naive_table(text: &str) -> Vec<u32> {
@@ -345,21 +364,25 @@ fn sais_table<'s>(text: &'s str) -> Vec<u32> {
     sa
 }
 
-fn sais<T>(
-    sa: &mut [u32],
-    stypes: &mut SuffixTypes,
-    bins: &mut Bins,
-    text: &T,
-) where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
+fn sais<T>(sa: &mut [u32], stypes: &mut SuffixTypes, bins: &mut Bins, text: &T)
+where
+    T: Text,
+    <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
+{
     // Instead of working out edge cases in the code below, just allow them
     // to assume >=2 characters.
     match text.len() {
         0 => return,
-        1 => { sa[0] = 0; return; }
-        _ => {},
+        1 => {
+            sa[0] = 0;
+            return;
+        }
+        _ => {}
     }
 
-    for v in sa.iter_mut() { *v = 0; }
+    for v in sa.iter_mut() {
+        *v = 0;
+    }
     stypes.compute(text);
     bins.find_sizes(text.char_indices().map(|c| c.idx_char().1));
     bins.find_tail_pointers();
@@ -414,13 +437,17 @@ fn sais<T>(
     }
     // This check is necessary because we don't have a sentinel, which would
     // normally guarantee at least one wstring.
-    if num_wstrs == 0 { num_wstrs = 1; }
+    if num_wstrs == 0 {
+        num_wstrs = 1;
+    }
 
     let mut prev_sufi = 0u32; // the first suffix can never be a valley
     let mut name = 0u32;
     // We set our "name buffer" to be max u32 values. Since there are at
     // most n/2 wstrings, a name can never be greater than n/2.
-    for i in num_wstrs..(sa.len() as u32) { sa[i as usize] = u32::MAX; }
+    for i in num_wstrs..(sa.len() as u32) {
+        sa[i as usize] = u32::MAX;
+    }
     for i in 0..num_wstrs {
         let cur_sufi = sa[i as usize];
         if prev_sufi == 0 || !text.wstring_equal(stypes, cur_sufi, prev_sufi) {
@@ -541,10 +568,11 @@ impl SuffixTypes {
         SuffixTypes { types: vec![SuffixType::Ascending; num_bytes as usize] }
     }
 
-    fn compute<'a, T>(
-        &mut self,
-        text: &T,
-    ) where T: Text, <<T as Text>::IdxChars as Iterator>::Item: IdxChar {
+    fn compute<'a, T>(&mut self, text: &T)
+    where
+        T: Text,
+        <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
+    {
         let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
         let (mut lasti, mut lastc) = match chars.next() {
             None => return,
@@ -568,15 +596,25 @@ impl SuffixTypes {
     }
 
     #[inline]
-    fn ty(&self, i: u32) -> SuffixType { self.types[i as usize] }
+    fn ty(&self, i: u32) -> SuffixType {
+        self.types[i as usize]
+    }
     #[inline]
-    fn is_asc(&self, i: u32) -> bool { self.ty(i).is_asc() }
+    fn is_asc(&self, i: u32) -> bool {
+        self.ty(i).is_asc()
+    }
     #[inline]
-    fn is_desc(&self, i: u32) -> bool { self.ty(i).is_desc() }
+    fn is_desc(&self, i: u32) -> bool {
+        self.ty(i).is_desc()
+    }
     #[inline]
-    fn is_valley(&self, i: u32) -> bool { self.ty(i).is_valley() }
+    fn is_valley(&self, i: u32) -> bool {
+        self.ty(i).is_valley()
+    }
     #[inline]
-    fn equal(&self, i: u32, j: u32) -> bool { self.ty(i) == self.ty(j) }
+    fn equal(&self, i: u32, j: u32) -> bool {
+        self.ty(i) == self.ty(j)
+    }
 }
 
 impl SuffixType {
@@ -590,12 +628,20 @@ impl SuffixType {
 
     #[inline]
     fn is_desc(&self) -> bool {
-        if let Descending = *self { true } else { false }
+        if let Descending = *self {
+            true
+        } else {
+            false
+        }
     }
 
     #[inline]
     fn is_valley(&self) -> bool {
-        if let Valley = *self { true } else { false }
+        if let Valley = *self {
+            true
+        } else {
+            false
+        }
     }
 
     fn inherit(&self) -> SuffixType {
@@ -610,7 +656,7 @@ impl PartialEq for SuffixType {
     #[inline]
     fn eq(&self, other: &SuffixType) -> bool {
         (self.is_asc() && other.is_asc())
-        || (self.is_desc() && other.is_desc())
+            || (self.is_desc() && other.is_desc())
     }
 }
 
@@ -629,9 +675,14 @@ impl Bins {
         }
     }
 
-    fn find_sizes<I>(&mut self, chars: I) where I: Iterator<Item=u32> {
+    fn find_sizes<I>(&mut self, chars: I)
+    where
+        I: Iterator<Item = u32>,
+    {
         self.alphas.clear();
-        for size in self.sizes.iter_mut() { *size = 0; }
+        for size in self.sizes.iter_mut() {
+            *size = 0;
+        }
         for c in chars {
             self.inc_size(c);
             if self.size(c) == 1 {
@@ -685,7 +736,9 @@ impl Bins {
     }
 
     #[inline]
-    fn size(&self, c: u32) -> u32 { self.sizes[c as usize] }
+    fn size(&self, c: u32) -> u32 {
+        self.sizes[c as usize]
+    }
 }
 
 /// Encapsulates iteration and indexing over text.
@@ -720,7 +773,9 @@ impl<'s> Text for Utf8<'s> {
     type IdxChars = iter::Enumerate<slice::Iter<'s, u8>>;
 
     #[inline]
-    fn len(&self) -> u32 { self.0.len() as u32 }
+    fn len(&self) -> u32 {
+        self.0.len() as u32
+    }
 
     #[inline]
     fn prev(&self, i: u32) -> (u32, u32) {
@@ -728,7 +783,9 @@ impl<'s> Text for Utf8<'s> {
     }
 
     #[inline]
-    fn char_at(&self, i: u32) -> u32 { self.0[i as usize] as u32 }
+    fn char_at(&self, i: u32) -> u32 {
+        self.0[i as usize] as u32
+    }
 
     fn char_indices(&self) -> iter::Enumerate<slice::Iter<'s, u8>> {
         self.0.iter().enumerate()
@@ -761,13 +818,19 @@ impl<'s> Text for LexNames<'s> {
     type IdxChars = iter::Enumerate<slice::Iter<'s, u32>>;
 
     #[inline]
-    fn len(&self) -> u32 { self.0.len() as u32 }
+    fn len(&self) -> u32 {
+        self.0.len() as u32
+    }
 
     #[inline]
-    fn prev(&self, i: u32) -> (u32, u32) { (i - 1, self.0[i as usize - 1]) }
+    fn prev(&self, i: u32) -> (u32, u32) {
+        (i - 1, self.0[i as usize - 1])
+    }
 
     #[inline]
-    fn char_at(&self, i: u32) -> u32 { self.0[i as usize] }
+    fn char_at(&self, i: u32) -> u32 {
+        self.0[i as usize]
+    }
 
     fn char_indices(&self) -> iter::Enumerate<slice::Iter<'s, u32>> {
         self.0.iter().enumerate()
@@ -802,17 +865,23 @@ trait IdxChar {
 
 impl<'a> IdxChar for (usize, &'a u8) {
     #[inline]
-    fn idx_char(self) -> (usize, u32) { (self.0, *self.1 as u32) }
+    fn idx_char(self) -> (usize, u32) {
+        (self.0, *self.1 as u32)
+    }
 }
 
 impl<'a> IdxChar for (usize, &'a u32) {
     #[inline]
-    fn idx_char(self) -> (usize, u32) { (self.0, *self.1) }
+    fn idx_char(self) -> (usize, u32) {
+        (self.0, *self.1)
+    }
 }
 
 impl IdxChar for (usize, char) {
     #[inline]
-    fn idx_char(self) -> (usize, u32) { (self.0, self.1 as u32) }
+    fn idx_char(self) -> (usize, u32) {
+        (self.0, self.1 as u32)
+    }
 }
 
 /// Binary search to find first element such that `pred(T) == true`.
@@ -820,11 +889,10 @@ impl IdxChar for (usize, char) {
 /// Assumes that if `pred(xs[i]) == true` then `pred(xs[i+1]) == true`.
 ///
 /// If all elements yield `pred(T) == false`, then `xs.len()` is returned.
-fn binary_search<T, F>(
-    xs: &[T],
-    mut pred: F,
-) -> usize
-where F: FnMut(&T) -> bool {
+fn binary_search<T, F>(xs: &[T], mut pred: F) -> usize
+where
+    F: FnMut(&T) -> bool,
+{
     let (mut left, mut right) = (0, xs.len());
     while left < right {
         let mid = (left + right) / 2;

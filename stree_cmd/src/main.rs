@@ -10,7 +10,7 @@ use std::fmt;
 use std::io::{self, Write};
 
 use docopt::Docopt;
-use suffix_tree::{SuffixTree, Node};
+use suffix_tree::{Node, SuffixTree};
 
 static USAGE: &'static str = "
 Usage:
@@ -35,11 +35,15 @@ enum Error {
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error { Error::Io(err) }
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
+    }
 }
 
 impl From<String> for Error {
-    fn from(err: String) -> Error { Error::Other(err) }
+    fn from(err: String) -> Error {
+        Error::Other(err)
+    }
 }
 
 impl fmt::Display for Error {
@@ -53,8 +57,8 @@ impl fmt::Display for Error {
 
 fn main() {
     let args: Args = Docopt::new(USAGE)
-                            .and_then(|d| d.deserialize())
-                            .unwrap_or_else(|e| e.exit());
+        .and_then(|d| d.deserialize())
+        .unwrap_or_else(|e| e.exit());
     if let Err(err) = args.run() {
         write!(&mut io::stderr(), "{}", err).unwrap();
         ::std::process::exit(1);
@@ -81,7 +85,12 @@ fn print_dot_tree(st: &SuffixTree) {
     println!("}}");
 }
 
-fn print_dot_node(st: &SuffixTree, node: &Node, parent: u32, mut id: u32) -> u32 {
+fn print_dot_node(
+    st: &SuffixTree,
+    node: &Node,
+    parent: u32,
+    mut id: u32,
+) -> u32 {
     // This entire function could be drastically simplified if we could nab
     // a unique id for each node.
     let node_id = id;
@@ -113,8 +122,11 @@ fn is_only_leaf(node: &Node) -> bool {
 }
 
 fn terminals(node: &Node) -> String {
-    node.suffixes().iter()
-        .map(|&n| n.to_string()).collect::<Vec<_>>().connect(", ")
+    node.suffixes()
+        .iter()
+        .map(|&n| n.to_string())
+        .collect::<Vec<_>>()
+        .connect(", ")
 }
 
 fn label(st: &SuffixTree, node: &Node) -> String {

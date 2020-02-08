@@ -4,8 +4,12 @@ extern crate suffix;
 use quickcheck::{QuickCheck, TestResult, Testable};
 use suffix::SuffixTable;
 
-fn sais(text: &str) -> SuffixTable { SuffixTable::new(text) }
-fn naive(text: &str) -> SuffixTable { SuffixTable::new_naive(text) }
+fn sais(text: &str) -> SuffixTable {
+    SuffixTable::new(text)
+}
+fn naive(text: &str) -> SuffixTable {
+    SuffixTable::new_naive(text)
+}
 
 fn qc<T: Testable>(f: T) {
     QuickCheck::new().tests(1000).max_tests(10000).quickcheck(f);
@@ -69,7 +73,9 @@ fn snowman_is_ok() {
 #[test]
 fn prop_naive_equals_sais() {
     fn prop(s: String) -> TestResult {
-        if s.is_empty() { return TestResult::discard(); }
+        if s.is_empty() {
+            return TestResult::discard();
+        }
         let expected = naive(&*s);
         let got = sais(&*s);
         TestResult::from_bool(expected == got)
