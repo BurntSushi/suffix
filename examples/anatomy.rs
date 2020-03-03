@@ -9,9 +9,9 @@ fn main() {
     print!("{:?}", st);
 
     // If we want to find the substring "quick" then we should get
-    // two results back. The first is the 4th index, the 2nd is at 
+    // two results back. The first is the 4th index, the 2nd is at
     // the 24th index of the original string.
-    let result =  st.positions("quick");
+    let result = st.positions("quick");
     println!("search result: {:?}", result);
     assert_eq!(result, &[4, 24]);
 
