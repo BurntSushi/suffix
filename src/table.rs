@@ -33,7 +33,7 @@ use self::SuffixType::{Ascending, Descending, Valley};
 /// smaller subproblem, and solves it recursively. The subproblem is to find
 /// the suffix array of a smaller string, where that string is composed by
 /// naming contiguous regions of the original text. If there are any duplicate
-/// names, then the algorithm procedes recursively. If there are no duplicate
+/// names, then the algorithm proceeds recursively. If there are no duplicate
 /// names (base case), then the suffix array of the subproblem is already
 /// computed. In essence, this "inductively sorts" suffixes of the original
 /// text with several linear scans over the text. Because of the number of
@@ -426,7 +426,7 @@ where
         }
     }
 
-    // Find and move all wstrings to the beinning of `sa`.
+    // Find and move all wstrings to the beginning of `sa`.
     let mut num_wstrs = 0u32;
     for i in 0..sa.len() {
         let sufi = sa[i];
