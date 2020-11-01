@@ -336,11 +336,7 @@ fn lcp_lens_quadratic(text: &str, table: &[u32]) -> Vec<u32> {
 }
 
 fn lcp_len(a: &[u8], b: &[u8]) -> u32 {
-    a.iter()
-        .cloned()
-        .zip(b.iter().cloned())
-        .take_while(|&(ca, cb)| ca == cb)
-        .count() as u32
+    a.iter().zip(b.iter()).take_while(|(ca, cb)| ca == cb).count() as u32
 }
 
 fn naive_table(text: &str) -> Vec<u32> {
