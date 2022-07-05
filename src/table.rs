@@ -194,17 +194,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     /// assert!(sa.contains("quick"));
     /// ```
     pub fn contains(&self, query: &str) -> bool {
-        let (text, query) = (self.text.as_bytes(), query.as_bytes());
-        query.len() > 0
-            && self
-                .table
-                .binary_search_by(|&sufi| {
-                    text[sufi as usize..]
-                        .iter()
-                        .take(query.len())
-                        .cmp(query.iter())
-                })
-                .is_ok()
+        self.any_position(query).is_some()
     }
 
     /// Returns an unordered list of positions where `query` starts in `text`.
@@ -265,6 +255,40 @@ impl<'s, 't> SuffixTable<'s, 't> {
         } else {
             &self.table[start..end]
         }
+    }
+
+    /// Returns an arbitrary one of the positions where `query` starts in
+    /// `text`.
+    ///
+    /// This runs in `O(mlogn)` time just like [`contains`][Self::contains] and
+    /// [`positions`][Self::positions], but the constant factor is that of
+    /// `contains`, which is the more efficient of the two.
+    ///
+    /// The return value is a byte indices into `text`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use suffix::SuffixTable;
+    ///
+    /// let sa = SuffixTable::new("The quick brown fox was very quick.");
+    /// let position = sa.any_position("quick");
+    /// assert!(position == Some(4) || position == Some(29));
+    /// ```
+    pub fn any_position(&self, query: &str) -> Option<u32> {
+        let (text, query) = (self.text.as_bytes(), query.as_bytes());
+        if query.len() == 0 {
+            return None;
+        }
+        self.table
+            .binary_search_by(|&sufi| {
+                text[sufi as usize..]
+                    .iter()
+                    .take(query.len())
+                    .cmp(query.iter())
+            })
+            .ok()
+            .map(|i| self.table[i])
     }
 }
 
