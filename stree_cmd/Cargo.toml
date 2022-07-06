@@ -8,7 +8,7 @@ homepage = "https://github.com/BurntSushi/suffix"
 repository = "https://github.com/BurntSushi/suffix"
 readme = "../README.md"
 keywords = ["suffix", "text", "search", "index", "tree"]
-license = "Unlicense/MIT"
+license = "Unlicense OR MIT"
 
 [[bin]]
 name = "stree"

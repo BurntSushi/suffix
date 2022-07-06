@@ -3,9 +3,9 @@ suffix
 Fast linear time & space suffix arrays for Rust. Supports Unicode!
 
 [![Build status](https://github.com/BurntSushi/suffix/workflows/ci/badge.svg)](https://github.com/BurntSushi/suffix/actions)
-[![](http://meritbadge.herokuapp.com/suffix)](https://crates.io/crates/suffix)
+[![crates.io](https://img.shields.io/crates/v/suffix.svg)](https://crates.io/crates/suffix)
 
-Dual-licensed under MIT or the [UNLICENSE](http://unlicense.org).
+Dual-licensed under MIT or the [UNLICENSE](https://unlicense.org/).
 
 
 ### Documentation
@@ -25,7 +25,7 @@ Add it to your `Cargo.toml` like so:
 
 ```toml
 [dependencies]
-suffix = "1.2"
+suffix = "1.3"
 ```
 
 
@@ -54,7 +54,7 @@ cargo build --release
 
 And here's what it looks like:
 
-!["banana" suffix tree](http://burntsushi.net/stuff/banana.png)
+!["banana" suffix tree](https://burntsushi.net/stuff/banana.png)
 
 
 ### Status of implementation

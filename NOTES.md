@@ -31,10 +31,10 @@ in [(Nong et al.,
 which is a fast linear time construction by using induced sorting. I've found
 the paper to be nearly impenetrable, but
 [(Shrestha et al.,
-2014)](http://bib.oxfordjournals.org/content/15/2/138.full.pdf) provide a more
+2014)](https://bib.oxfordjournals.org/content/15/2/138.full.pdf) provide a more
 accessible description of the algorithm that I think I understand. There also
 exists a linear time construction of the LCP array via induced sorting that is
-described in [(Fischer, 2011)](http://arxiv.org/pdf/1101.3448.pdf).
+described in [(Fischer, 2011)](https://arxiv.org/pdf/1101.3448.pdf).
 
 OK, I've implemented the algorithm from Nong et al. in `src/array.rs`.
 QuickCheck says it's equivalent to the naive implementation, which gives me
