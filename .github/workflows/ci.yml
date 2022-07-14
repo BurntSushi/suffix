@@ -48,11 +48,9 @@ jobs:
       with:
         fetch-depth: 1
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@v1
       with:
         toolchain: ${{ matrix.rust }}
-        override: true
-        profile: minimal
     - run: cargo build --verbose
     - run: cargo doc --verbose
     - run: cargo test --verbose
@@ -73,11 +71,9 @@ jobs:
       with:
         fetch-depth: 1
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@v1
       with:
         toolchain: stable
-        override: true
-        profile: minimal
         components: rustfmt
     - name: Check formatting (root)
       run: |
