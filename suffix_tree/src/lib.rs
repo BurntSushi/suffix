@@ -59,16 +59,9 @@ pub struct Node {
     path_len: u32,
 }
 
+#[derive(Clone,Copy)]
 struct Rawlink<T> {
     p: *mut T,
-}
-
-impl<T: Copy> Copy for Rawlink<T> {}
-
-impl<T: Copy> Clone for Rawlink<T> {
-    fn clone(&self) -> Rawlink<T> {
-        *self
-    }
 }
 
 impl<'s> SuffixTree<'s> {
@@ -272,7 +265,7 @@ impl fmt::Debug for Node {
             self.end,
             self.children.len(),
             self.suffixes.len(),
-            self.parent().map(|_| "yes").unwrap_or("no")
+            self.parent().map_or("no", |_| "yes")
         )
     }
 }
@@ -508,7 +501,7 @@ fn to_suffix_tree(sa: &SuffixTable) -> SuffixTree<'static> {
                 int_node.children.insert(st.key(&leaf), leaf);
                 vins.children.insert(st.key(&int_node), int_node);
             }
-            _ => unreachable!(),
+            Ordering::Greater => unreachable!(),
         }
     }
     st
