@@ -28,9 +28,10 @@ extern crate quickcheck;
 extern crate suffix;
 
 use std::borrow::{Cow, ToOwned};
+use std::cmp::Ordering;
 use std::collections::btree_map::{self, BTreeMap};
 use std::fmt;
-use std::iter;
+
 use std::ptr;
 
 use suffix::SuffixTable;
@@ -47,6 +48,7 @@ pub struct SuffixTree<'s> {
     root: Box<Node>,
 }
 
+#[allow(clippy::len_without_is_empty)]
 /// A node in a suffix tree.
 pub struct Node {
     parent: Rawlink<Node>,
@@ -112,21 +114,21 @@ impl<'s> SuffixTree<'s> {
 
 impl Node {
     /// An iterator over all children of this node.
-    pub fn children<'t>(&'t self) -> Children<'t> {
+    pub fn children(&self) -> Children<'_> {
         Children { it: self.children.values() }
     }
 
     /// An iterator over all ancestors of this node.
     ///
     /// This includes the current node and the root node.
-    pub fn ancestors<'t>(&'t self) -> Ancestors<'t> {
+    pub fn ancestors(&self) -> Ancestors<'_> {
         Ancestors { cur: Some(self) }
     }
 
     /// Traverse all children nodes in preorder.
     ///
     /// This is the same as lexicographically traversing nodes in the tree.
-    pub fn preorder<'t>(&'t self) -> Preorder<'t> {
+    pub fn preorder(&self) -> Preorder<'_> {
         Preorder::new(self)
     }
 
@@ -135,12 +137,12 @@ impl Node {
     /// A node is a leaf if and only if it has terminals. It may still have
     /// children nodes. (This fact suggests this SuffixTree implementation
     /// is bunk.)
-    pub fn leaves<'t>(&'t self) -> Leaves<'t> {
+    pub fn leaves(&self) -> Leaves<'_> {
         Leaves { it: self.preorder() }
     }
 
     /// An iterator over all suffix indices.
-    pub fn suffix_indices<'t>(&'t self) -> SuffixTreeIndices<'t> {
+    pub fn suffix_indices(&self) -> SuffixTreeIndices<'_> {
         SuffixTreeIndices { it: self.leaves(), node: None, cur_suffix: 0 }
     }
 
@@ -156,7 +158,7 @@ impl Node {
 
     /// Returns true if and only if this node has some terminals.
     pub fn has_terminals(&self) -> bool {
-        self.suffixes.len() > 0
+        !self.suffixes.is_empty()
     }
 
     /// Returns all terminal suffix indices.
@@ -171,8 +173,8 @@ impl Node {
             parent: Rawlink::none(),
             children: BTreeMap::new(),
             suffixes: vec![sufstart],
-            start: start,
-            end: end,
+            start,
+            end,
             path_len: 0,
         })
     }
@@ -182,8 +184,8 @@ impl Node {
             parent: Rawlink::none(),
             children: BTreeMap::new(),
             suffixes: vec![],
-            start: start,
-            end: end,
+            start,
+            end,
             path_len: 0,
         })
     }
@@ -235,27 +237,27 @@ impl<T> Rawlink<T> {
 
 impl<'s> fmt::Debug for SuffixTree<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fn fmt<'s>(
+        fn fmt(
             f: &mut fmt::Formatter,
-            st: &SuffixTree<'s>,
+            st: &SuffixTree<'_>,
             node: &Node,
             depth: usize,
         ) -> fmt::Result {
-            let indent: String = iter::repeat(' ').take(depth * 2).collect();
+            let indent: String = " ".repeat(depth * 2);
             if node.is_root() {
-                try!(writeln!(f, "ROOT"));
+                writeln!(f, "ROOT")?;
             } else {
-                try!(writeln!(f, "{}{:?}", indent, &st.label(node)));
+                (writeln!(f, "{}{:?}", indent, &st.label(node)))?;
             }
             for child in node.children() {
-                try!(fmt(f, st, child, depth + 1));
+                (fmt(f, st, child, depth + 1))?;
             }
             Ok(())
         }
-        try!(writeln!(f, "\n-----------------------------------------"));
-        try!(writeln!(f, "SUFFIX TREE"));
-        try!(writeln!(f, "text: {}", self.text));
-        try!(fmt(f, self, self.root(), 0));
+        (writeln!(f, "\n-----------------------------------------"))?;
+        (writeln!(f, "SUFFIX TREE"))?;
+        (writeln!(f, "text: {}", self.text))?;
+        (fmt(f, self, self.root(), 0))?;
         writeln!(f, "-----------------------------------------")
     }
 }
@@ -362,12 +364,7 @@ impl<'t> Iterator for Leaves<'t> {
     type Item = &'t Node;
 
     fn next(&mut self) -> Option<&'t Node> {
-        for n in self.it.by_ref() {
-            if n.len() > 0 && n.has_terminals() {
-                return Some(n);
-            }
-        }
-        None
+        self.it.by_ref().find(|&n| n.len() > 0 && n.has_terminals())
     }
 }
 
@@ -403,7 +400,7 @@ impl<'t> Iterator for SuffixTreeIndices<'t> {
 }
 
 fn to_suffix_tree(sa: &SuffixTable) -> SuffixTree<'static> {
-    fn ancestor_lcp_len<'a>(start: &'a mut Node, lcplen: u32) -> &'a mut Node {
+    fn ancestor_lcp_len(start: &mut Node, lcplen: u32) -> &mut Node {
         // Is it worth making a mutable `Ancestors` iterator?
         // If this is the only place that needs it, probably not. ---AG
         let mut cur = start;
@@ -430,86 +427,88 @@ fn to_suffix_tree(sa: &SuffixTable) -> SuffixTree<'static> {
         let lcp_len = lcp_lens[i];
         let vins = ancestor_lcp_len(unsafe { &mut *last }, lcp_len);
         let dv = vins.path_len;
-        if dv == lcp_len {
-            // The concatenation of the labels from root-to-vins equals
-            // the longest common prefix of SA[i-1] and SA[i].
-            // This means that the suffix we're adding contains the
-            // entirety of `vins`, which in turn means we can simply
-            // add it as a new leaf.
-            let mut node = Node::leaf(
-                sufstart,
-                sufstart + lcp_len,
-                sa.text().len() as u32,
-            );
-            node.add_parent(vins);
+        match dv.cmp(&lcp_len) {
+            Ordering::Equal => {
+                // The concatenation of the labels from root-to-vins equals
+                // the longest common prefix of SA[i-1] and SA[i].
+                // This means that the suffix we're adding contains the
+                // entirety of `vins`, which in turn means we can simply
+                // add it as a new leaf.
+                let mut node = Node::leaf(
+                    sufstart,
+                    sufstart + lcp_len,
+                    sa.text().len() as u32,
+                );
+                node.add_parent(vins);
 
-            let first_char = st.key(&node);
-            // TODO: I don't yet understand why this invariant is true,
-            // but it has to be---otherwise the algorithm is flawed. ---AG
-            assert!(!vins.children.contains_key(&first_char));
+                let first_char = st.key(&node);
+                // TODO: I don't yet understand why this invariant is true,
+                // but it has to be---otherwise the algorithm is flawed. ---AG
+                assert!(!vins.children.contains_key(&first_char));
 
-            last = &mut *node;
-            vins.children.insert(first_char, node);
-        } else if dv < lcp_len {
-            // In this case, `vins`'s right-most child overlaps with the
-            // suffix we're trying to insert. So we need to:
-            //   1) Cut the right-most edge (but keep the node).
-            //   2) Create a new internal node whose path-label is the LCP.
-            //   3) Attach the old node to the new internal node. Its
-            //      label should be what it was before, but with the LCP
-            //      removed.
-            //   4) Add a new leaf to this internal node containing the
-            //      current suffix with the LCP removed.
+                last = &mut *node;
+                vins.children.insert(first_char, node);
+            }
+            Ordering::Less => {
+                // In this case, `vins`'s right-most child overlaps with the
+                // suffix we're trying to insert. So we need to:
+                //   1) Cut the right-most edge (but keep the node).
+                //   2) Create a new internal node whose path-label is the LCP.
+                //   3) Attach the old node to the new internal node. Its
+                //      label should be what it was before, but with the LCP
+                //      removed.
+                //   4) Add a new leaf to this internal node containing the
+                //      current suffix with the LCP removed.
 
-            // Why is this invariant true?
-            // Well, the only way this can't be true is if `vins` is
-            // `last`, which is the last leaf that was added. (If `vins`
-            // isn't `last`, then `vins` must be a parent of `last`, which
-            // implies it has a child.)
-            // But we also know that the current suffix is > than the last
-            // suffix inserted, which means the lcp of the last suffix and
-            // this suffix can be at *most* len(last). Therefore, when
-            // `vins` is `last`, we have that `len(last) >= len(lcp)`,
-            // which implies that `len(last)` (== `dv`) can never be less
-            // than `len(lcp)` (== `lcp_len`). Which in turn implies that
-            // we can't be here, since `dv < lcp_len`.
-            assert!(vins.children.len() > 0);
-            // Thus, we can pick the right-most child with impunity.
-            let rkey = *vins.children.keys().next_back().unwrap();
+                // Why is this invariant true?
+                // Well, the only way this can't be true is if `vins` is
+                // `last`, which is the last leaf that was added. (If `vins`
+                // isn't `last`, then `vins` must be a parent of `last`, which
+                // implies it has a child.)
+                // But we also know that the current suffix is > than the last
+                // suffix inserted, which means the lcp of the last suffix and
+                // this suffix can be at *most* len(last). Therefore, when
+                // `vins` is `last`, we have that `len(last) >= len(lcp)`,
+                // which implies that `len(last)` (== `dv`) can never be less
+                // than `len(lcp)` (== `lcp_len`). Which in turn implies that
+                // we can't be here, since `dv < lcp_len`.
+                assert!(!vins.children.is_empty());
+                // Thus, we can pick the right-most child with impunity.
+                let rkey = *vins.children.keys().next_back().unwrap();
 
-            // 1) cut the right-most edge
-            let mut rnode = vins.children.remove(&rkey).unwrap();
+                // 1) cut the right-most edge
+                let mut rnode = vins.children.remove(&rkey).unwrap();
 
-            // 2) create new internal node (full path label == LCP)
-            let mut int_node =
-                Node::internal(table[i - 1] + dv, table[i - 1] + lcp_len);
-            int_node.add_parent(vins);
+                // 2) create new internal node (full path label == LCP)
+                let mut int_node =
+                    Node::internal(table[i - 1] + dv, table[i - 1] + lcp_len);
+                int_node.add_parent(vins);
 
-            // 3) Attach old node to new internal node and update
-            // the label.
-            rnode.start = table[i - 1] + lcp_len;
-            rnode.end = table[i - 1] + rnode.path_len;
-            rnode.add_parent(&mut *int_node);
+                // 3) Attach old node to new internal node and update
+                // the label.
+                rnode.start = table[i - 1] + lcp_len;
+                rnode.end = table[i - 1] + rnode.path_len;
+                rnode.add_parent(&mut int_node);
 
-            // 4) Create new leaf node with the current suffix, but with
-            // the lcp trimmed.
-            let mut leaf = Node::leaf(
-                sufstart,
-                sufstart + lcp_len,
-                sa.text().len() as u32,
-            );
-            leaf.add_parent(&mut *int_node);
+                // 4) Create new leaf node with the current suffix, but with
+                // the lcp trimmed.
+                let mut leaf = Node::leaf(
+                    sufstart,
+                    sufstart + lcp_len,
+                    sa.text().len() as u32,
+                );
+                leaf.add_parent(&mut int_node);
 
-            // Update the last node we visited.
-            last = &mut *leaf;
+                // Update the last node we visited.
+                last = &mut *leaf;
 
-            // Finally, attach all of the nodes together.
-            assert!(st.key(&rnode) != st.key(&leaf)); // why? ---AG
-            int_node.children.insert(st.key(&rnode), rnode);
-            int_node.children.insert(st.key(&leaf), leaf);
-            vins.children.insert(st.key(&int_node), int_node);
-        } else {
-            unreachable!()
+                // Finally, attach all of the nodes together.
+                assert!(st.key(&rnode) != st.key(&leaf)); // why? ---AG
+                int_node.children.insert(st.key(&rnode), rnode);
+                int_node.children.insert(st.key(&leaf), leaf);
+                vins.children.insert(st.key(&int_node), int_node);
+            }
+            _ => unreachable!(),
         }
     }
     st
