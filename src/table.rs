@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::fmt;
 use std::iter;
 use std::slice;
@@ -80,7 +81,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     {
         let text = text.into();
         let table = Cow::Owned(sais_table(&text));
-        SuffixTable { text: text, table: table }
+        SuffixTable { text, table }
     }
 
     /// The same as `new`, except it runs in `O(n^2 * logn)` time.
@@ -95,7 +96,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     {
         let text = text.into();
         let table = Cow::Owned(naive_table(&text));
-        SuffixTable { text: text, table: table }
+        SuffixTable { text, table }
     }
 
     /// Creates a new suffix table from an existing list of lexicographically
@@ -114,7 +115,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     {
         let (text, table) = (text.into(), table.into());
         assert_eq!(text.len(), table.len());
-        SuffixTable { text: text, table: table }
+        SuffixTable { text, table }
     }
 
     /// Extract the parts of a suffix table.
@@ -224,8 +225,8 @@ impl<'s, 't> SuffixTable<'s, 't> {
 
         // We can quickly decide whether the query won't match at all if
         // it's outside the range of suffixes.
-        if text.len() == 0
-            || query.len() == 0
+        if text.is_empty()
+            || query.is_empty()
             || (query < self.suffix_bytes(0)
                 && !self.suffix_bytes(0).starts_with(query))
             || query > self.suffix_bytes(self.len() - 1)
@@ -277,7 +278,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
     /// ```
     pub fn any_position(&self, query: &str) -> Option<u32> {
         let (text, query) = (self.text.as_bytes(), query.as_bytes());
-        if query.len() == 0 {
+        if query.is_empty() {
             return None;
         }
         self.table
@@ -367,20 +368,20 @@ fn naive_table(text: &str) -> Vec<u32> {
     let text = text.as_bytes();
     assert!(text.len() <= u32::MAX as usize);
     let mut table = vec![0u32; text.len()];
-    for i in 0..table.len() {
-        table[i] = i as u32;
+    for (i, element) in table.iter_mut().enumerate() {
+        *element = i as u32;
     }
     table.sort_by(|&a, &b| text[a as usize..].cmp(&text[b as usize..]));
     table
 }
 
-fn sais_table<'s>(text: &'s str) -> Vec<u32> {
+fn sais_table(text: &str) -> Vec<u32> {
     let text = text.as_bytes();
     assert!(text.len() <= u32::MAX as usize);
     let mut sa = vec![0u32; text.len()];
     let mut stypes = SuffixTypes::new(text.len() as u32);
     let mut bins = Bins::new();
-    sais(&mut *sa, &mut stypes, &mut bins, &Utf8(text));
+    sais(&mut sa, &mut stypes, &mut bins, &Utf8(text));
     sa
 }
 
@@ -588,7 +589,7 @@ impl SuffixTypes {
         SuffixTypes { types: vec![SuffixType::Ascending; num_bytes as usize] }
     }
 
-    fn compute<'a, T>(&mut self, text: &T)
+    fn compute<T>(&mut self, text: &T)
     where
         T: Text,
         <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
@@ -600,13 +601,11 @@ impl SuffixTypes {
         };
         self.types[lasti] = Descending;
         for (i, c) in chars {
-            if c < lastc {
-                self.types[i] = Ascending;
-            } else if c > lastc {
-                self.types[i] = Descending;
-            } else {
-                self.types[i] = self.types[lasti].inherit();
-            }
+            self.types[i] = match c.cmp(&lastc) {
+                Ordering::Less => Ascending,
+                Ordering::Greater => Descending,
+                Ordering::Equal => self.types[lasti].inherit(),
+            };
             if self.types[i].is_desc() && self.types[lasti].is_asc() {
                 self.types[lasti] = Valley;
             }
@@ -639,35 +638,24 @@ impl SuffixTypes {
 
 impl SuffixType {
     #[inline]
-    fn is_asc(&self) -> bool {
-        match *self {
-            Ascending | Valley => true,
-            _ => false,
-        }
+    fn is_asc(self) -> bool {
+        matches!(self, Ascending | Valley)
     }
 
     #[inline]
-    fn is_desc(&self) -> bool {
-        if let Descending = *self {
-            true
-        } else {
-            false
-        }
+    fn is_desc(self) -> bool {
+        matches!(self, Descending)
     }
 
     #[inline]
-    fn is_valley(&self) -> bool {
-        if let Valley = *self {
-            true
-        } else {
-            false
-        }
+    fn is_valley(self) -> bool {
+        matches!(self, Valley)
     }
 
-    fn inherit(&self) -> SuffixType {
-        match *self {
+    fn inherit(self) -> SuffixType {
+        match self {
             Valley => Ascending,
-            _ => *self,
+            _ => self,
         }
     }
 }
@@ -709,7 +697,7 @@ impl Bins {
                 self.alphas.push(c);
             }
         }
-        self.alphas.sort();
+        self.alphas.sort_unstable();
 
         let ptrs_len = self.alphas[self.alphas.len() - 1] + 1;
         self.ptrs = vec![0u32; ptrs_len as usize];

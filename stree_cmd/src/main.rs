@@ -12,7 +12,7 @@ use std::io::{self, Write};
 use docopt::Docopt;
 use suffix_tree::{Node, SuffixTree};
 
-static USAGE: &'static str = "
+static USAGE: &str = "
 Usage:
     stree [ <text> ... ]
     stree -h | --help
@@ -118,7 +118,7 @@ fn print_dot_node(
 }
 
 fn is_only_leaf(node: &Node) -> bool {
-    node.children().len() == 0 && node.suffixes().len() >= 1
+    node.children().len() == 0 && !node.suffixes().is_empty()
 }
 
 fn terminals(node: &Node) -> String {
