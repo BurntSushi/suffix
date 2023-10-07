@@ -595,8 +595,9 @@ impl SuffixTypes {
         <<T as Text>::IdxChars as Iterator>::Item: IdxChar,
     {
         let mut chars = text.char_indices().map(|v| v.idx_char()).rev();
-        let Some((mut lasti, mut lastc)) = chars.next() else {
-            return
+        let (mut lasti, mut lastc) = match chars.next() {
+            None => return,
+            Some(t) => t,
         };
         self.types[lasti] = Descending;
         for (i, c) in chars {
