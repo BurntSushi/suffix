@@ -58,7 +58,7 @@ pub struct Node {
     path_len: u32,
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 struct Rawlink<T> {
     p: *mut T,
 }
@@ -280,12 +280,10 @@ impl<'t> Iterator for Ancestors<'t> {
     type Item = &'t Node;
 
     fn next(&mut self) -> Option<&'t Node> {
-        if let Some(node) = self.cur {
+        self.cur.take().map(|node| {
             self.cur = node.parent();
-            Some(node)
-        } else {
-            None
-        }
+            node
+        })
     }
 }
 
