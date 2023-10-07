@@ -48,7 +48,6 @@ pub struct SuffixTree<'s> {
     root: Box<Node>,
 }
 
-#[allow(clippy::len_without_is_empty)]
 /// A node in a suffix tree.
 pub struct Node {
     parent: Rawlink<Node>,
