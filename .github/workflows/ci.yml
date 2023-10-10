@@ -13,7 +13,6 @@ jobs:
     strategy:
       matrix:
         build:
-        - pinned
         - stable
         - beta
         - nightly
@@ -21,9 +20,6 @@ jobs:
         - win-msvc
         - win-gnu
         include:
-        - build: pinned
-          os: ubuntu-latest
-          rust: 1.60.0
         - build: stable
           os: ubuntu-latest
           rust: stable
