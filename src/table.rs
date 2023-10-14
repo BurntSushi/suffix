@@ -25,7 +25,7 @@ use self::SuffixType::{Ascending, Descending, Valley};
 /// below.) The specific algorithm implemented is from
 /// [(Nong et al., 2009)](https://local.ugene.unipro.ru/tracker/secure/attachment/12144/Linear%20Suffix%20Array%20Construction%20by%20Almost%20Pure%20Induced-Sorting.pdf),
 /// but I actually used the description found in
-/// [(Shrestha et al., 2014)](http://bib.oxfordjournals.org/content/15/2/138.full.pdf),
+/// [(Shrestha et al., 2014)](https://bib.oxfordjournals.org/content/15/2/138.full.pdf),
 /// because it is much more accessible to someone who is not used to reading
 /// algorithms papers.
 ///
@@ -236,7 +236,7 @@ impl<'s, 't> SuffixTable<'s, 't> {
 
         // The below is pretty close to the algorithm on Wikipedia:
         //
-        //     http://en.wikipedia.org/wiki/Suffix_array#Applications
+        //     https://en.wikipedia.org/wiki/Suffix_array#Applications
         //
         // The key difference is that after we find the start index, we look
         // for the end by finding the first occurrence that doesn't start
@@ -318,7 +318,7 @@ impl<'s, 't> fmt::Debug for SuffixTable<'s, 't> {
 //
 // // This is a linear time construction algorithm taken from the first
 // // two slides of:
-// // http://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
+// // https://www.cs.helsinki.fi/u/tpkarkka/opetus/11s/spa/lecture10.pdf
 // //
 // // It does require the use of the inverse suffix array, which makes this
 // // O(n) in space. The inverse suffix array gives us a special ordering
